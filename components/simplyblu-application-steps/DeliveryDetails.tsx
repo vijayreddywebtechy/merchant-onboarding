@@ -358,6 +358,10 @@ export default function DeliveryDetails() {
             If your application is successful, your delivery will be processed after 48 hours.
           </p>
         </div>
+                <div className="flex flex-col md:flex-row gap-3 !mt-12">
+                    <Button variant="outline" className="w-full md:max-w-40">Back</Button>
+                    <Button className="w-full md:max-w-40">Next</Button>
+                </div>
       </div>
     </div>
   );

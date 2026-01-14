@@ -3,6 +3,7 @@ import CustomSelect from "@/components/dynamic/CustomSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface BankingDetailsData {
   estimatedTurnover: string;
@@ -309,6 +310,10 @@ const CompanyBankingDetails = (props: Props) => {
               </div>
             </div>
           </div>
+        </div>
+          <div className="flex flex-col md:flex-row gap-3 !mt-12">
+            <Button variant="outline" className="w-full md:max-w-40">Back</Button>
+            <Button className="w-full md:max-w-40">Next</Button>
         </div>
       </div>
     </div>

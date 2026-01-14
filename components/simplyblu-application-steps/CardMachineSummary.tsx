@@ -416,10 +416,10 @@ export default function CardMachineSummary() {
       </div>
 
       <div className="flex mt-10 gap-4">
-        <Button variant="outline" className="w-full md:w-1/3">
+        <Button variant="outline" className="w-full md:w-1/4">
           Back
         </Button>
-        <Button className="w-full md:w-1/3" onClick={() => setOpen(true)}>
+        <Button className="w-full md:w-1/4" onClick={() => setOpen(true)}>
           Confirm
         </Button>
       </div>
