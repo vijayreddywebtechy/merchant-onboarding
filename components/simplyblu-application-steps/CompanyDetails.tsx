@@ -1,43 +1,46 @@
-import React, { useState, ChangeEvent } from "react";
+"use client";
+
+import React, { useState, ChangeEvent, useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import CustomSelect from "@/components/dynamic/CustomSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Info, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { companyDetailsSchema } from "@/lib/validationSchemas";
+import { useCustomMutation } from "@/hooks/useCustomMutation";
+import { transformCompanyDetailsToAPI } from "@/lib/apiTransformers";
+import {
+  provinceOptions,
+  cityOptions,
+  businessNatureOptions,
+  businessIndustryOptions,
+} from "@/lib/data";
 
-interface CompanyDetailsData {
+type CompanyDetailsData = {
   registeredCompanyName: string;
   countryOfRegistration: string;
   addressType: "same" | "different";
-  addressSearch: string;
-  streetNumber: string;
-  suburb: string;
-  complexName: string;
-  province: string;
-  cityTown: string;
-  postalCode: string;
+  addressSearch?: string;
+  streetNumber?: string;
+  suburb?: string;
+  complexName?: string | null;
+  province?: string;
+  cityTown?: string;
+  postalCode?: string;
   natureOfBusiness: string;
   industryClassification: string;
-  preferredBranch: string;
+  preferredBranch?: string | null;
   ownership: string;
   hasValidBBBEE: string;
+};
+
+interface CompanyDetailsProps {
+  onNext?: (data: CompanyDetailsData) => Promise<void>;
+  onBack?: () => void;
 }
-
-type Props = {};
-
-// Province options for CustomSelect
-const provinceOptions = [
-  { value: 'eastern-cape', label: 'Eastern Cape' },
-  { value: 'free-state', label: 'Free State' },
-  { value: 'gauteng', label: 'Gauteng' },
-  { value: 'kwazulu-natal', label: 'KwaZulu-Natal' },
-  { value: 'limpopo', label: 'Limpopo' },
-  { value: 'mpumalanga', label: 'Mpumalanga' },
-  { value: 'northern-cape', label: 'Northern Cape' },
-  { value: 'north-west', label: 'North West' },
-  { value: 'western-cape', label: 'Western Cape' },
-];
 
 // City/Town options for CustomSelect
 const cityTownOptions = [
@@ -45,22 +48,6 @@ const cityTownOptions = [
   { value: 'pretoria', label: 'Pretoria' },
   { value: 'cape-town', label: 'Cape Town' },
   { value: 'durban', label: 'Durban' },
-];
-
-// Nature of Business options
-const natureOfBusinessOptions = [
-  { value: 'retail', label: 'Retail' },
-  { value: 'services', label: 'Services' },
-  { value: 'manufacturing', label: 'Manufacturing' },
-  { value: 'consulting', label: 'Consulting' },
-];
-
-// Industry Classification options
-const industryClassificationOptions = [
-  { value: 'technology', label: 'Technology' },
-  { value: 'healthcare', label: 'Healthcare' },
-  { value: 'finance', label: 'Finance' },
-  { value: 'education', label: 'Education' },
 ];
 
 // Preferred Branch options
@@ -78,109 +65,214 @@ const ownershipOptions = [
   { value: 'company', label: 'Company' },
 ];
 
-function CompanyDetails({}: Props) {
-  const [formData, setFormData] = useState<CompanyDetailsData>({
-    registeredCompanyName: "ABC Consulting",
-    countryOfRegistration: "South Africa",
-    addressType: "different",
-    addressSearch: "",
-    streetNumber: "",
-    suburb: "",
-    complexName: "",
-    province: "",
-    cityTown: "",
-    postalCode: "",
-    natureOfBusiness: "",
-    industryClassification: "",
-    preferredBranch: "",
-    ownership: "",
-    hasValidBBBEE: "",
+function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
+  const formRef = React.useRef<HTMLFormElement>(null);
+  const [residentialAddress, setResidentialAddress] = React.useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { mutate: updateCompanyDetails } = useCustomMutation({
+    url: `/api/company-details`,
+    method: "PUT",
   });
 
-  const [showTooltip, setShowTooltip] = useState<boolean>(false);
-  const [streetError, setStreetError] = useState<boolean>(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    control,
+    trigger,
+    watch,
+    reset,
+  } = useForm({
+    resolver: yupResolver(companyDetailsSchema) as any,
+    mode: "onChange",
+    defaultValues: {
+      registeredCompanyName: "ABC Consulting",
+      countryOfRegistration: "South Africa",
+      addressType: "different",
+      addressSearch: "",
+      streetNumber: "",
+      suburb: "",
+      complexName: "",
+      province: "",
+      cityTown: "",
+      postalCode: "",
+      natureOfBusiness: "",
+      industryClassification: "",
+      preferredBranch: "",
+      ownership: "",
+      hasValidBBBEE: "",
+    },
+  });
 
-  const handleInputChange = (
-    e: ChangeEvent<HTMLInputElement>
-  ): void => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
-    if (name === "streetNumber" && value) {
-      setStreetError(false);
+  React.useEffect(() => {
+    // Load saved company details first
+    const data = localStorage.getItem("companyDetailsFormData");
+    if (data) {
+      reset(JSON.parse(data));
+    } else {
+      // If no saved data, try to prefill from merchantonboardingdata
+      const merchantData = localStorage.getItem("merchantonboardingdata");
+      if (merchantData) {
+        const parsed = JSON.parse(merchantData);
+        if (parsed.businessDetails) {
+          reset({
+            registeredCompanyName: "",
+            countryOfRegistration: "South Africa",
+            addressType: "different",
+            addressSearch: "",
+            streetNumber: "",
+            suburb: "",
+            complexName: "",
+            province: parsed.businessDetails.province || "",
+            cityTown: "",
+            postalCode: "",
+            natureOfBusiness: "",
+            industryClassification: "",
+            preferredBranch: "",
+            ownership: "",
+            hasValidBBBEE: "",
+          });
+        }
+      }
     }
-  };
 
-  const handleProvinceChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      province: selected ? selected.value : "",
-    }));
-  };
-
-  const handleCityTownChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      cityTown: selected ? selected.value : "",
-    }));
-  };
-
-  const handleNatureOfBusinessChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      natureOfBusiness: selected ? selected.value : "",
-    }));
-  };
-
-  const handleIndustryClassificationChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      industryClassification: selected ? selected.value : "",
-    }));
-  };
-
-  const handlePreferredBranchChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      preferredBranch: selected ? selected.value : "",
-    }));
-  };
-
-  const handleOwnershipChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      ownership: selected ? selected.value : "",
-    }));
-  };
-
-  const handleRadioChange = (name: string, value: string): void => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleAddressSearch = (): void => {
-    console.log("Searching for address:", formData.addressSearch);
-  };
-
-  const handleStreetBlur = (): void => {
-    if (!formData.streetNumber) {
-      setStreetError(true);
+    // Load residential address from PersonalInfo
+    const personalData = localStorage.getItem("personalDetailsFormData");
+    if (personalData) {
+      setResidentialAddress(JSON.parse(personalData));
     }
+  }, [reset]);
+
+  const addressType = watch("addressType");
+
+  // Save form data in real-time to localStorage
+  useEffect(() => {
+    const subscription = watch((data) => {
+      // Always save with merged residential address data when addressType is "same"
+      if (data.addressType === "same" && residentialAddress) {
+        const companyData = {
+          ...data,
+          streetNumber: residentialAddress.street || data.streetNumber,
+          suburb: residentialAddress.suburb || data.suburb,
+          complexName: residentialAddress.buildingName || data.complexName,
+          province: residentialAddress.province || data.province,
+          cityTown: residentialAddress.city || data.cityTown,
+          postalCode: residentialAddress.postalCode || data.postalCode,
+        };
+        localStorage.setItem("companyDetailsFormData", JSON.stringify(companyData));
+      } else {
+        localStorage.setItem("companyDetailsFormData", JSON.stringify(data));
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, residentialAddress]);
+
+  // Also save immediately when residentialAddress loads (for initial state)
+  useEffect(() => {
+    if (residentialAddress) {
+      const currentData = watch();
+      if (currentData.addressType === "same") {
+        const companyData = {
+          ...currentData,
+          streetNumber: residentialAddress.street || currentData.streetNumber,
+          suburb: residentialAddress.suburb || currentData.suburb,
+          complexName: residentialAddress.buildingName || currentData.complexName,
+          province: residentialAddress.province || currentData.province,
+          cityTown: residentialAddress.city || currentData.cityTown,
+          postalCode: residentialAddress.postalCode || currentData.postalCode,
+        };
+        localStorage.setItem("companyDetailsFormData", JSON.stringify(companyData));
+      }
+    }
+  }, [residentialAddress, watch]);
+
+  // Expose validation through window object for Stepper to call
+  useEffect(() => {
+    (window as any).__companyDetailsValidate = async () => {
+      const isValid = await new Promise<boolean>((resolve) => {
+        handleSubmit(
+          () => resolve(true),
+          () => resolve(false)
+        )();
+      });
+      return isValid;
+    };
+  }, [handleSubmit]);
+
+  const onSubmit = async (data: any) => {
+    setIsSubmitting(true);
+    console.log("Company details submitted:", data);
+
+    // Merge residential address data if addressType is "same"
+    let finalData = data;
+    if (data.addressType === "same" && residentialAddress) {
+      finalData = {
+        ...data,
+        streetNumber: residentialAddress.street || data.streetNumber,
+        suburb: residentialAddress.suburb || data.suburb,
+        complexName: residentialAddress.buildingName || data.complexName,
+        province: residentialAddress.province || data.province,
+        cityTown: residentialAddress.city || data.cityTown,
+        postalCode: residentialAddress.postalCode || data.postalCode,
+      };
+    }
+
+    localStorage.setItem("companyDetailsFormData", JSON.stringify(finalData));
+
+    // Get preApplicationResponse data
+    const preApplicationResponse = JSON.parse(
+      localStorage.getItem("preApplicationResponse") || "{}"
+    );
+    const inflightCustomerDataID = preApplicationResponse.inflightCustomerDataId;
+    const customerUUID = preApplicationResponse.initiators?.[0]?.initiatorBPGUID;
+
+    if (!inflightCustomerDataID || !customerUUID) {
+      console.warn("Missing preApplicationResponse data, proceeding without API call");
+      setIsSubmitting(false);
+      if (onNext) {
+        await onNext(finalData as CompanyDetailsData);
+      }
+      return;
+    }
+
+    // Transform form data to API payload
+    const payload = transformCompanyDetailsToAPI(
+      finalData,
+      inflightCustomerDataID,
+      customerUUID
+    );
+
+    console.log("CompanyDetails API Payload:", payload);
+
+    // Store the payload for later use in MarketingConsent
+    localStorage.setItem("companyDetailsPayload", JSON.stringify(payload));
+
+    // Make API call
+    updateCompanyDetails(
+      { body: payload },
+      {
+        onSuccess: (res) => {
+          console.log("Company details updated successfully:", res);
+          setIsSubmitting(false);
+          if (onNext) {
+            onNext(finalData as CompanyDetailsData);
+          }
+        },
+        onError: (error) => {
+          console.error("Error updating company details:", error);
+          setIsSubmitting(false);
+          // Proceed to next step even if API fails
+          if (onNext) {
+            onNext(finalData as CompanyDetailsData);
+          }
+        },
+      }
+    );
   };
 
   return (
-    <div className="py-6 md:py-8">
+    <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="py-6 md:py-8">
       {/* Header */}
       <div className="text-center mb-8 md:mb-10">
         <h2 className="text-xl md:text-2xl lg:text-3xl font-medium text-gray-700 mb-3">
@@ -212,9 +304,7 @@ function CompanyDetails({}: Props) {
               <Input
                 type="text"
                 id="registeredCompanyName"
-                name="registeredCompanyName"
-                value={formData.registeredCompanyName}
-                onChange={handleInputChange}
+                {...register("registeredCompanyName")}
                 className="bg-gray-50"
                 readOnly
               />
@@ -228,9 +318,7 @@ function CompanyDetails({}: Props) {
               <Input
                 type="text"
                 id="countryOfRegistration"
-                name="countryOfRegistration"
-                value={formData.countryOfRegistration}
-                onChange={handleInputChange}
+                {...register("countryOfRegistration")}
                 className="bg-gray-50"
                 readOnly
               />
@@ -248,39 +336,56 @@ function CompanyDetails({}: Props) {
           </p>
 
           {/* Address Type Radio */}
-          <RadioGroup
-            value={formData.addressType}
-            onValueChange={(value) => handleRadioChange("addressType", value)}
-            className="flex gap-6 mb-6"
-          >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="same" id="address-same" />
-              <Label
-                htmlFor="address-same"
-                className="font-normal cursor-pointer"
+          <Controller
+            name="addressType"
+            control={control}
+            render={({ field }) => (
+              <RadioGroup
+                value={field.value}
+                onValueChange={field.onChange}
+                className="flex gap-6 mb-6"
               >
-                Same as residential address
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="different" id="address-different" />
-              <Label
-                htmlFor="address-different"
-                className="font-normal cursor-pointer"
-              >
-                Different address
-              </Label>
-            </div>
-          </RadioGroup>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="same" id="address-same" />
+                  <Label
+                    htmlFor="address-same"
+                    className="font-normal cursor-pointer"
+                  >
+                    Same as residential address
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="different" id="address-different" />
+                  <Label
+                    htmlFor="address-different"
+                    className="font-normal cursor-pointer"
+                  >
+                    Different address
+                  </Label>
+                </div>
+              </RadioGroup>
+            )}
+          />
 
-          {formData.addressType === "same" ? (
+          {addressType === "same" ? (
             /* Display Address Summary */
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
               <h3 className="text-sm font-medium text-gray-700 mb-2">
                 Your company's current physical address
               </h3>
               <p className="text-gray-800">
-                12 Steyn City, Oiase complex, Johannesburg, 2011
+                {residentialAddress ? (
+                  <>
+                    {residentialAddress.street && <span>{residentialAddress.street}</span>}
+                    {residentialAddress.unit && <span>, {residentialAddress.unit}</span>}
+                    {residentialAddress.buildingName && <span>, {residentialAddress.buildingName}</span>}
+                    {residentialAddress.suburb && <span>, {residentialAddress.suburb}</span>}
+                    {residentialAddress.city && <span>, {residentialAddress.city}</span>}
+                    {residentialAddress.postalCode && <span>, {residentialAddress.postalCode}</span>}
+                  </>
+                ) : (
+                  "12 Steyn City, Oiase complex, Johannesburg, 2011"
+                )}
               </p>
             </div>
           ) : (
@@ -294,73 +399,54 @@ function CompanyDetails({}: Props) {
                   <Input
                     type="text"
                     id="addressSearch"
-                    name="addressSearch"
-                    value={formData.addressSearch}
-                    onChange={handleInputChange}
-                    onFocus={() => setShowTooltip(true)}
-                    onBlur={() => setTimeout(() => setShowTooltip(false), 200)}
+                    {...register("addressSearch")}
                     placeholder="Enter your address"
                     className="pr-12"
                   />
                   <button
-                    onClick={handleAddressSearch}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      console.log("Searching for address");
+                    }}
                     className="absolute right-0 top-0 h-full px-4 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 transition-colors flex items-center justify-center"
                   >
                     <Search size={18} />
                   </button>
-
-                  {/* Tooltip */}
-                  {showTooltip && (
-                    <div className="absolute left-0 top-full mt-2 bg-gray-800 text-white text-xs rounded px-3 py-2 z-10 max-w-xs">
-                      If your address did not appear, please enter it.
-                      <div className="absolute -top-1 left-4 w-2 h-2 bg-gray-800 transform rotate-45"></div>
-                    </div>
-                  )}
                 </div>
               </div>
 
               {/* Street Number and Suburb */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div className="space-y-2 relative">
+                <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label htmlFor="streetNumber">
                       Street number and name
                     </Label>
-                    <div className="relative">
-                    <button className="flex-shrink-0 mt-1"
-                        onMouseEnter={() => setShowTooltip(true)}
-                        onMouseLeave={() => setShowTooltip(false)}
-                        >
-                      <Info size={20} className="text-white fill-primary-dark" />
-                    </button>
-                    </div>
                   </div>
                   <Input
                     type="text"
                     id="streetNumber"
-                    name="streetNumber"
-                    value={formData.streetNumber}
-                    onChange={handleInputChange}
-                    onBlur={handleStreetBlur}
+                    {...register("streetNumber")}
                     placeholder="e.g 134 Raglan street"
+                    className={errors.streetNumber ? "border-red-500" : ""}
                   />
-                  {streetError && (
-                    <p className="text-xs text-red-600">Please complete</p>
+                  {errors.streetNumber && (
+                    <p className="text-red-500 text-sm">{errors.streetNumber.message}</p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="suburb">
-                    Suburb
-                  </Label>
+                  <Label htmlFor="suburb">Suburb</Label>
                   <Input
                     type="text"
                     id="suburb"
-                    name="suburb"
-                    value={formData.suburb}
-                    onChange={handleInputChange}
+                    {...register("suburb")}
                     placeholder="e.g Sandton"
+                    className={errors.suburb ? "border-red-500" : ""}
                   />
+                  {errors.suburb && (
+                    <p className="text-red-500 text-sm">{errors.suburb.message}</p>
+                  )}
                 </div>
               </div>
 
@@ -373,58 +459,76 @@ function CompanyDetails({}: Props) {
                   <Input
                     type="text"
                     id="complexName"
-                    name="complexName"
-                    value={formData.complexName}
-                    onChange={handleInputChange}
+                    {...register("complexName")}
                     placeholder="e.g. Eye of Africa Estate"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="province">
-                    Province
-                  </Label>
-                  <CustomSelect
-                    value={(() => {
-                      const found = provinceOptions.find(opt => opt.value === formData.province);
-                      return found ? found : null;
-                    })()}
-                    onChange={handleProvinceChange}
-                    options={provinceOptions}
-                    placeholder="Please select"
+                  <Label htmlFor="province">Province</Label>
+                  <Controller
+                    name="province"
+                    control={control}
+                    render={({ field }) => (
+                      <CustomSelect
+                        value={(() => {
+                          const found = provinceOptions.find(opt => opt.value === field.value);
+                          return found ? found : null;
+                        })()}
+                        onChange={(option) => {
+                          const selected = Array.isArray(option) ? option[0] : option;
+                          field.onChange(selected ? selected.value : "");
+                        }}
+                        options={provinceOptions}
+                        placeholder="Please select"
+                      />
+                    )}
                   />
+                  {errors.province && (
+                    <p className="text-red-500 text-sm">{errors.province.message}</p>
+                  )}
                 </div>
               </div>
 
               {/* City/Town and Postal Code */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="cityTown">
-                    City/town
-                  </Label>
-                  <CustomSelect
-                    value={(() => {
-                      const found = cityTownOptions.find(opt => opt.value === formData.cityTown);
-                      return found ? found : null;
-                    })()}
-                    onChange={handleCityTownChange}
-                    options={cityTownOptions}
-                    placeholder="Please select"
+                  <Label htmlFor="cityTown">City/town</Label>
+                  <Controller
+                    name="cityTown"
+                    control={control}
+                    render={({ field }) => (
+                      <CustomSelect
+                        value={(() => {
+                          const found = cityTownOptions.find(opt => opt.value === field.value);
+                          return found ? found : null;
+                        })()}
+                        onChange={(option) => {
+                          const selected = Array.isArray(option) ? option[0] : option;
+                          field.onChange(selected ? selected.value : "");
+                        }}
+                        options={cityTownOptions}
+                        placeholder="Please select"
+                      />
+                    )}
                   />
+                  {errors.cityTown && (
+                    <p className="text-red-500 text-sm">{errors.cityTown.message}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="postalCode">
-                    Postal code
-                  </Label>
+                  <Label htmlFor="postalCode">Postal code</Label>
                   <Input
                     type="text"
                     id="postalCode"
-                    name="postalCode"
-                    value={formData.postalCode}
-                    onChange={handleInputChange}
+                    {...register("postalCode")}
                     placeholder="e.g. 2091"
+                    className={errors.postalCode ? "border-red-500" : ""}
                   />
+                  {errors.postalCode && (
+                    <p className="text-red-500 text-sm">{errors.postalCode.message}</p>
+                  )}
                 </div>
               </div>
             </>
@@ -443,15 +547,27 @@ function CompanyDetails({}: Props) {
               <Label htmlFor="natureOfBusiness">
                 Nature of the business
               </Label>
-              <CustomSelect
-                value={(() => {
-                  const found = natureOfBusinessOptions.find(opt => opt.value === formData.natureOfBusiness);
-                  return found ? found : null;
-                })()}
-                onChange={handleNatureOfBusinessChange}
-                options={natureOfBusinessOptions}
-                placeholder="Please select"
+              <Controller
+                name="natureOfBusiness"
+                control={control}
+                render={({ field }) => (
+                  <CustomSelect
+                    value={(() => {
+                      const found = businessNatureOptions.find(opt => opt.value === field.value);
+                      return found ? found : null;
+                    })()}
+                    onChange={(option) => {
+                      const selected = Array.isArray(option) ? option[0] : option;
+                      field.onChange(selected ? selected.value : "");
+                    }}
+                    options={businessNatureOptions}
+                    placeholder="Please select"
+                  />
+                )}
               />
+              {errors.natureOfBusiness && (
+                <p className="text-red-500 text-sm">{errors.natureOfBusiness.message}</p>
+              )}
             </div>
 
             {/* Industry Classification */}
@@ -459,15 +575,27 @@ function CompanyDetails({}: Props) {
               <Label htmlFor="industryClassification">
                 Industry classification
               </Label>
-              <CustomSelect
-                value={(() => {
-                  const found = industryClassificationOptions.find(opt => opt.value === formData.industryClassification);
-                  return found ? found : null;
-                })()}
-                onChange={handleIndustryClassificationChange}
-                options={industryClassificationOptions}
-                placeholder="Please select"
+              <Controller
+                name="industryClassification"
+                control={control}
+                render={({ field }) => (
+                  <CustomSelect
+                    value={(() => {
+                      const found = businessIndustryOptions.find(opt => opt.value === field.value);
+                      return found ? found : null;
+                    })()}
+                    onChange={(option) => {
+                      const selected = Array.isArray(option) ? option[0] : option;
+                      field.onChange(selected ? selected.value : "");
+                    }}
+                    options={businessIndustryOptions}
+                    placeholder="Please select"
+                  />
+                )}
               />
+              {errors.industryClassification && (
+                <p className="text-red-500 text-sm">{errors.industryClassification.message}</p>
+              )}
             </div>
           </div>
 
@@ -477,14 +605,23 @@ function CompanyDetails({}: Props) {
               <Label htmlFor="preferredBranch">
                 Preferred branch (optional)
               </Label>
-              <CustomSelect
-                value={(() => {
-                  const found = preferredBranchOptions.find(opt => opt.value === formData.preferredBranch);
-                  return found ? found : null;
-                })()}
-                onChange={handlePreferredBranchChange}
-                options={preferredBranchOptions}
-                placeholder="Please select"
+              <Controller
+                name="preferredBranch"
+                control={control}
+                render={({ field }) => (
+                  <CustomSelect
+                    value={(() => {
+                      const found = preferredBranchOptions.find(opt => opt.value === field.value);
+                      return found ? found : null;
+                    })()}
+                    onChange={(option) => {
+                      const selected = Array.isArray(option) ? option[0] : option;
+                      field.onChange(selected ? selected.value : "");
+                    }}
+                    options={preferredBranchOptions}
+                    placeholder="Please select"
+                  />
+                )}
               />
             </div>
           </div>
@@ -502,15 +639,27 @@ function CompanyDetails({}: Props) {
               <Label htmlFor="ownership">
                 Ownership
               </Label>
-              <CustomSelect
-                value={(() => {
-                  const found = ownershipOptions.find(opt => opt.value === formData.ownership);
-                  return found ? found : null;
-                })()}
-                onChange={handleOwnershipChange}
-                options={ownershipOptions}
-                placeholder="Owner"
+              <Controller
+                name="ownership"
+                control={control}
+                render={({ field }) => (
+                  <CustomSelect
+                    value={(() => {
+                      const found = ownershipOptions.find(opt => opt.value === field.value);
+                      return found ? found : null;
+                    })()}
+                    onChange={(option) => {
+                      const selected = Array.isArray(option) ? option[0] : option;
+                      field.onChange(selected ? selected.value : "");
+                    }}
+                    options={ownershipOptions}
+                    placeholder="Owner"
+                  />
+                )}
               />
+              {errors.ownership && (
+                <p className="text-red-500 text-sm">{errors.ownership.message}</p>
+              )}
             </div>
 
             {/* Valid B-BBEE Certificate */}
@@ -519,45 +668,56 @@ function CompanyDetails({}: Props) {
                 <Label>
                   Does the business have a valid B-BBEE Certificate?
                 </Label>
-                <button className="flex-shrink-0">
+                <button className="flex-shrink-0" type="button">
                   <Info size={20} className="text-white fill-primary-dark" />
                 </button>
               </div>
-              <RadioGroup
-                value={formData.hasValidBBBEE}
-                onValueChange={(value) =>
-                  handleRadioChange("hasValidBBBEE", value)
-                }
-                className="flex gap-6 py-3"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="yes" id="bbbee-yes" />
-                  <Label
-                    htmlFor="bbbee-yes"
-                    className="font-normal cursor-pointer"
+              <Controller
+                name="hasValidBBBEE"
+                control={control}
+                render={({ field }) => (
+                  <RadioGroup
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    className="flex gap-6 py-3"
                   >
-                    Yes
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="no" id="bbbee-no" />
-                  <Label
-                    htmlFor="bbbee-no"
-                    className="font-normal cursor-pointer"
-                  >
-                    No
-                  </Label>
-                </div>
-              </RadioGroup>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="yes" id="bbbee-yes" />
+                      <Label
+                        htmlFor="bbbee-yes"
+                        className="font-normal cursor-pointer"
+                      >
+                        Yes
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="no" id="bbbee-no" />
+                      <Label
+                        htmlFor="bbbee-no"
+                        className="font-normal cursor-pointer"
+                      >
+                        No
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                )}
+              />
+              {errors.hasValidBBBEE && (
+                <p className="text-red-500 text-sm">{errors.hasValidBBBEE.message}</p>
+              )}
             </div>
           </div>
         </div>
         <div className="flex flex-col md:flex-row gap-3 !mt-12">
-            <Button variant="outline" className="w-full md:max-w-40">Back</Button>
-            <Button className="w-full md:max-w-40">Next</Button>
+            {onBack && (
+              <Button variant="outline" className="w-full md:max-w-40" onClick={onBack} type="button">
+                Back
+              </Button>
+            )}
+            <Button className="w-full md:max-w-40 ml-auto" type="submit">Next</Button>
         </div>
       </div>
-    </div>
+    </form>
   );
 }
 

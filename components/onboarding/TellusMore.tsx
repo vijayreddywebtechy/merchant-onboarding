@@ -1,19 +1,38 @@
 "use client";
 
-import { useState, ChangeEvent } from "react";
+import { useState, ChangeEvent, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 import Image from "next/image";
 import merchantApp from "@/assets/images/general/mobile_app_device.png"
 
 type OptionType = "rent" | "activate" | "merchant-app";
-type Props = {};
+type Props = {
+  onNext: () => void;
+  onBack: () => void;
+};
 
 const TellusMore = (props: Props) => {
   const [selectedOption, setSelectedOption] = useState<OptionType>("rent");
 
+  useEffect(() => {
+    const data = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+    if (data.selectedOption) {
+      setSelectedOption(data.selectedOption);
+    }
+  }, []);
+
   const handleOptionChange = (e: ChangeEvent<HTMLInputElement>): void => {
     setSelectedOption(e.target.value as OptionType);
+  };
+
+  const handleNext = () => {
+    if (selectedOption) {
+      const existingData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+      existingData.selectedOption = selectedOption;
+      localStorage.setItem("merchantOnboardingData", JSON.stringify(existingData));
+      props.onNext();
+    }
   };
   return (
     <div className="page-container py-4 md:py-8">
@@ -75,11 +94,12 @@ const TellusMore = (props: Props) => {
               <Button
                 variant="outline"
                 className="flex-1 h-12 text-blue-600 border-blue-600 hover:bg-blue-50"
+                disabled
               >
                 BACK
               </Button>
 
-              <Button className="flex-1 h-12 bg-blue-600 hover:bg-blue-700">
+              <Button className="flex-1 h-12 bg-blue-600 hover:bg-blue-700" onClick={handleNext} disabled={!selectedOption}>
                 NEXT
               </Button>
             </div>

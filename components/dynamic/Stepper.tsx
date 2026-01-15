@@ -67,9 +67,76 @@ interface StepperProps {
   }>;
   currentStep: number;
   onStepChange: (step: number) => void;
+  onNext?: () => Promise<boolean> | boolean;
+  onBack?: () => Promise<boolean> | boolean;
 }
 
-export function Stepper({ steps, currentStep, onStepChange }: StepperProps) {
+export function Stepper({ steps, currentStep, onStepChange, onNext, onBack }: StepperProps) {
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [showCompanyInfoNavigation, setShowCompanyInfoNavigation] = React.useState(false);
+
+  // Listen for CompanyInfo substep changes
+  React.useEffect(() => {
+    const handleSubStepChange = (event: any) => {
+      setShowCompanyInfoNavigation(event.detail.isLastSubStep);
+    };
+    
+    window.addEventListener('companyInfoSubStepChange', handleSubStepChange);
+    return () => window.removeEventListener('companyInfoSubStepChange', handleSubStepChange);
+  }, []);
+
+  const handleNext = async () => {
+    setIsLoading(true);
+    try {
+      // Map step index to validation function names
+      const validationFunctions: { [key: number]: string } = {
+        0: "__personalInfoValidate",
+        1: "__companyDetailsValidate",
+        2: "__companyFinancialInfoValidate",
+        3: "__marketingConsentValidate",
+        4: "__bankingDetailsValidate",
+        5: "__deliveryDetailsValidate",
+        6: "__cardMachineSummaryValidate",
+      };
+
+      const validateFn = (window as any)[validationFunctions[currentStep]];
+      if (validateFn) {
+        const isValid = await validateFn();
+        if (!isValid) {
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      if (onNext) {
+        const isValid = await Promise.resolve(onNext());
+        if (isValid) {
+          onStepChange(currentStep + 1);
+        }
+      } else {
+        onStepChange(currentStep + 1);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBack = async () => {
+    if (onBack) {
+      setIsLoading(true);
+      try {
+        const isValid = await Promise.resolve(onBack());
+        if (isValid) {
+          onStepChange(currentStep - 1);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      onStepChange(currentStep - 1);
+    }
+  };
+
   return (
     <div className="w-full">
       {/* Step Indicators */}
@@ -93,22 +160,26 @@ export function Stepper({ steps, currentStep, onStepChange }: StepperProps) {
       {/* Current Step Content */}
       <div className="my-8 min-h-[300px]">{steps[currentStep]?.content}</div>
 
-      {/* Navigation Buttons */}
-      <div className="flex justify-between items-center pt-6 border-t">
-        <Button size="md"
-          variant="outline"
-          onClick={() => onStepChange(currentStep - 1)}
-          disabled={currentStep === 0}
-        >
-          Back
-        </Button>
-        <Button size="md"
-          onClick={() => onStepChange(currentStep + 1)}
-          disabled={currentStep === steps.length - 1}
-        >
-          {currentStep === steps.length - 1 ? "Finish" : "Next Step"}
-        </Button>
-      </div>
+      {/* Navigation Buttons - Show in 2nd step only when on last substep */}
+      {(currentStep !== 1 || showCompanyInfoNavigation) && (
+        <div className="flex justify-between items-center pt-6 border-t">
+          <Button
+            size="md"
+            variant="outline"
+            onClick={handleBack}
+            disabled={currentStep === 0 || isLoading}
+          >
+            Back
+          </Button>
+          <Button
+            size="md"
+            onClick={handleNext}
+            disabled={currentStep === steps.length - 1 || isLoading}
+          >
+            {isLoading ? "Loading..." : currentStep === steps.length - 1 ? "Finish" : "Next Step"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

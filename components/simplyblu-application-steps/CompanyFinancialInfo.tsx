@@ -1,150 +1,80 @@
-import React, { useState } from "react";
+"use client";
+
+import React, { useEffect, useRef } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import CustomSelect from "@/components/dynamic/CustomSelect";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { companyFinancialInfoSchema } from "@/lib/validationSchemas";
+import { amountRangeOptions, businessFundingOptions } from "@/lib/data";
 
-interface FinancialData {
-  entityClassification: string;
-  taxResidencyOutsideSA: string;
-  fundingSource: string[];
-  bbeTransaction: string;
-  profitFromBusiness: string;
+type FinancialData = {
+  annualTurnover: string;
+  monthlyProfit: string;
+  averageTransactionAmount: string;
   irregularIncome: string;
-  countryOfTaxResidency: string;
-  foreignTaxNumber: string;
-  reasonForNoTaxNumber: string;
+  fundingSource: string[];
+};
+
+interface Props {
+  onNext?: () => void;
+  onBack?: () => void;
 }
 
-type Props = {};
+function CompanyFinancialInfo({ onNext, onBack }: Props) {
+  const formRef = useRef<HTMLFormElement>(null);
 
-// Entity Classification options
-const entityClassificationOptions = [
-  { value: "sole-proprietor", label: "Sole Proprietor" },
-  { value: "partnership", label: "Partnership" },
-  { value: "private-company", label: "Private Company" },
-  { value: "public-company", label: "Public Company" },
-  { value: "non-profit", label: "Non-Profit Organization" },
-  { value: "trust", label: "Trust" },
-];
-
-// Funding Source options
-const fundingSourceOptions = [
-  { value: "personal-savings", label: "Personal Savings" },
-  { value: "bank-loan", label: "Bank Loan" },
-  { value: "investors", label: "Investors" },
-  { value: "grants", label: "Grants" },
-  { value: "family-friends", label: "Family and Friends" },
-  { value: "business-revenue", label: "Business Revenue" },
-];
-
-// Amount range options for financial fields
-const amountOptions = [
-  { value: "R 0 - R 5,000", label: "R 0 - R 5,000" },
-  { value: "R 5,001 - R 10,000", label: "R 5,001 - R 10,000" },
-  { value: "R 10,001 - R 25,000", label: "R 10,001 - R 25,000" },
-  { value: "R 25,001 - R 50,000", label: "R 25,001 - R 50,000" },
-  { value: "R 50,001 - R 100,000", label: "R 50,001 - R 100,000" },
-  { value: "R 100,001+", label: "R 100,001+" },
-];
-
-// Country options
-const countryOptions = [
-  { value: "south-africa", label: "South Africa" },
-  { value: "united-states", label: "United States" },
-  { value: "united-kingdom", label: "United Kingdom" },
-  { value: "germany", label: "Germany" },
-  { value: "france", label: "France" },
-  { value: "australia", label: "Australia" },
-  { value: "canada", label: "Canada" },
-];
-
-// Reason for not having tax number options
-const reasonForNoTaxNumberOptions = [
-  { value: "not-required", label: "Not required in my country" },
-  { value: "in-process", label: "Application in process" },
-  { value: "exempt", label: "Exempt from tax registration" },
-  { value: "other", label: "Other" },
-];
-
-function CompanyFinancialInfo({}: Props) {
-  const [formData, setFormData] = useState<FinancialData>({
-    entityClassification: "",
-    taxResidencyOutsideSA: "",
-    fundingSource: [],
-    bbeTransaction: "",
-    profitFromBusiness: "",
-    irregularIncome: "",
-    countryOfTaxResidency: "",
-    foreignTaxNumber: "",
-    reasonForNoTaxNumber: "",
+  const {
+    control,
+    formState: { errors, isValidating },
+    watch,
+    handleSubmit,
+    reset,
+  } = useForm<FinancialData>({
+    resolver: yupResolver(companyFinancialInfoSchema) as any,
+    mode: "onChange",
+    defaultValues: {
+      annualTurnover: "",
+      monthlyProfit: "",
+      averageTransactionAmount: "",
+      irregularIncome: "",
+      fundingSource: [],
+    },
   });
 
-  const [showTaxNumberReason, setShowTaxNumberReason] = useState(false);
+  React.useEffect(() => {
+    const data = localStorage.getItem("companyFinancialInfoFormData");
+    if (data) {
+      reset(JSON.parse(data));
+    }
+  }, [reset]);
 
-  const handleEntityClassificationChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      entityClassification: selected ? selected.value : "",
-    }));
-  };
+  const fundingSource = watch("fundingSource");
 
-  const handleFundingSourceChange = (options: any) => {
-    const selected = Array.isArray(options) ? options : [];
-    setFormData((prev) => ({
-      ...prev,
-      fundingSource: selected.map((opt: any) => opt.value),
-    }));
-  };
+  // Save form data in real-time to localStorage
+  // Save form data in real-time to localStorage
+  useEffect(() => {
+    const subscription = watch((data) => {
+      localStorage.setItem("companyFinancialInfoFormData", JSON.stringify(data));
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
 
-  const handleBBETransactionChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      bbeTransaction: selected ? selected.value : "",
-    }));
-  };
-
-  const handleProfitFromBusinessChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      profitFromBusiness: selected ? selected.value : "",
-    }));
-  };
-
-  const handleIrregularIncomeChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      irregularIncome: selected ? selected.value : "",
-    }));
-  };
-
-  const handleCountryOfTaxResidencyChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      countryOfTaxResidency: selected ? selected.value : "",
-    }));
-  };
-
-  const handleReasonForNoTaxNumberChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      reasonForNoTaxNumber: selected ? selected.value : "",
-    }));
-  };
-
-  const handleRadioChange = (name: string, value: string): void => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  // Expose validation through window object for Stepper to call
+  useEffect(() => {
+    (window as any).__companyFinancialInfoValidate = async () => {
+      const isValid = await new Promise<boolean>((resolve) => {
+        handleSubmit(
+          () => resolve(true),
+          () => resolve(false)
+        )();
+      });
+      return isValid;
+    };
+  }, [handleSubmit]);
 
   return (
     <div className="py-6 md:py-8">
@@ -165,294 +95,186 @@ function CompanyFinancialInfo({}: Props) {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            {/* Entity Classification */}
+            {/* Annual Turnover */}
             <div className="space-y-2">
-              <Label htmlFor="entityClassification">
-                Entity classification
-              </Label>
-              <CustomSelect
-                value={(() => {
-                  const found = entityClassificationOptions.find(
-                    (opt) => opt.value === formData.entityClassification
-                  );
-                  return found ? found : null;
-                })()}
-                onChange={handleEntityClassificationChange}
-                options={entityClassificationOptions}
-                placeholder="Please select"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            {/* Tax Residency Question */}
-            <div className="space-y-3">
-              <div className="flex items-start gap-2">
-                <Label>
-                  Does your company have tax residency outside of South Africa?
-                </Label>
-                <button className="flex-shrink-0">
-                  <Info size={20} className="text-white fill-primary-dark" />
-                </button>
-              </div>
-              <RadioGroup
-                value={formData.taxResidencyOutsideSA}
-                onValueChange={(value) =>
-                  handleRadioChange("taxResidencyOutsideSA", value)
-                }
-                className="flex gap-4"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="yes" id="tax-residency-yes" />
-                  <Label htmlFor="tax-residency-yes" className="cursor-pointer">
-                    Yes
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="no" id="tax-residency-no" />
-                  <Label htmlFor="tax-residency-no" className="cursor-pointer">
-                    No
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-          </div>
-
-          {/* Conditional Fields - Show when tax residency is Yes */}
-          {formData.taxResidencyOutsideSA === "yes" && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* Country of Tax Residency */}
-                <div className="space-y-2">
-                  <Label htmlFor="countryOfTaxResidency">
-                    Country of tax residency
-                  </Label>
-                  <CustomSelect
-                    value={(() => {
-                      const found = countryOptions.find(
-                        (opt) => opt.value === formData.countryOfTaxResidency
-                      );
-                      return found ? found : null;
-                    })()}
-                    onChange={handleCountryOfTaxResidencyChange}
-                    options={countryOptions}
-                    placeholder="Please select"
-                  />
-                </div>
-
-                {/* Foreign Tax Number */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label htmlFor="foreignTaxNumber">
-                      Foreign tax number
-                    </Label>
-                    <button
-                      type="button"
-                      onClick={() => setShowTaxNumberReason(!showTaxNumberReason)}
-                      className="text-xs text-blue-600 hover:underline"
-                    >
-                      I DON'T HAVE A TAX NUMBER
-                    </button>
-                  </div>
-                  <CustomSelect
-                    value={null}
-                    onChange={() => {}}
-                    options={[]}
-                    placeholder="Please select"
-                  />
-                </div>
-              </div>
-
-              {/* Add Additional Country */}
-              <div className="mb-6">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 text-blue-600 hover:underline text-sm"
-                >
-                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">+</span>
-                  ADD ADDITIONAL COUNTRY
-                </button>
-              </div>
-
-              {/* Reason for not having tax number - conditional */}
-              {showTaxNumberReason && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="reasonForNoTaxNumber">
-                      Reason for not having a foreign tax number
-                    </Label>
+              <Label htmlFor="annualTurnover">Annual turnover</Label>
+              <Controller
+                name="annualTurnover"
+                control={control}
+                render={({ field }) => (
+                  <>
                     <CustomSelect
                       value={(() => {
-                        const found = reasonForNoTaxNumberOptions.find(
-                          (opt) => opt.value === formData.reasonForNoTaxNumber
+                        const found = amountRangeOptions.find(
+                          (opt) => opt.value === field.value
                         );
                         return found ? found : null;
                       })()}
-                      onChange={handleReasonForNoTaxNumberChange}
-                      options={reasonForNoTaxNumberOptions}
+                      onChange={(option: any) => {
+                        const selected = Array.isArray(option) ? option[0] : option;
+                        field.onChange(selected ? selected.value : "");
+                      }}
+                      options={amountRangeOptions}
                       placeholder="Please select"
                     />
-                  </div>
-                  <div></div>
-                </div>
-              )}
-
-              {/* BBE Transaction and Funding Source */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div className="space-y-2">
-                  <Label htmlFor="bbeTransaction">
-                    BBE transaction (average monthly amount)
-                  </Label>
-                  <CustomSelect
-                    value={(() => {
-                      const found = amountOptions.find(
-                        (opt) => opt.value === formData.bbeTransaction
-                      );
-                      return found ? found : null;
-                    })()}
-                    onChange={handleBBETransactionChange}
-                    options={amountOptions}
-                    placeholder="R"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="fundingSource">
-                    How are you funding your business (choose one or more)
-                  </Label>
-                  <CustomSelect
-                    value={fundingSourceOptions.filter((opt) =>
-                      formData.fundingSource.includes(opt.value)
+                    {errors.annualTurnover && (
+                      <p className="text-sm text-red-500">
+                        {errors.annualTurnover.message}
+                      </p>
                     )}
-                    onChange={handleFundingSourceChange}
-                    options={fundingSourceOptions}
-                    placeholder="Please select"
-                    isMulti={true}
-                  />
-                </div>
-              </div>
+                  </>
+                )}
+              />
+            </div>
 
-              {/* Irregular Income and Profit from Business */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="irregularIncome">
-                    Irregular income (average monthly amount)
-                  </Label>
-                  <CustomSelect
-                    value={(() => {
-                      const found = amountOptions.find(
-                        (opt) => opt.value === formData.irregularIncome
-                      );
-                      return found ? found : null;
-                    })()}
-                    onChange={handleIrregularIncomeChange}
-                    options={amountOptions}
-                    placeholder="R"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="profitFromBusiness">
-                    Profit from business activity (average monthly amount)
-                  </Label>
-                  <CustomSelect
-                    value={(() => {
-                      const found = amountOptions.find(
-                        (opt) => opt.value === formData.profitFromBusiness
-                      );
-                      return found ? found : null;
-                    })()}
-                    onChange={handleProfitFromBusinessChange}
-                    options={amountOptions}
-                    placeholder="R"
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Conditional Fields - Show when tax residency is No */}
-          {formData.taxResidencyOutsideSA === "no" && (
-            <>
-              {/* Funding Source */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div className="space-y-2">
-                  <Label htmlFor="fundingSource">
-                    How are you funding your business (choose one or more)
-                  </Label>
-                  <CustomSelect
-                    value={fundingSourceOptions.filter((opt) =>
-                      formData.fundingSource.includes(opt.value)
+            {/* Monthly Profit */}
+            <div className="space-y-2">
+              <Label htmlFor="monthlyProfit">Monthly profit</Label>
+              <Controller
+                name="monthlyProfit"
+                control={control}
+                render={({ field }) => (
+                  <>
+                    <CustomSelect
+                      value={(() => {
+                        const found = amountRangeOptions.find(
+                          (opt) => opt.value === field.value
+                        );
+                        return found ? found : null;
+                      })()}
+                      onChange={(option: any) => {
+                        const selected = Array.isArray(option) ? option[0] : option;
+                        field.onChange(selected ? selected.value : "");
+                      }}
+                      options={amountRangeOptions}
+                      placeholder="Please select"
+                    />
+                    {errors.monthlyProfit && (
+                      <p className="text-sm text-red-500">
+                        {errors.monthlyProfit.message}
+                      </p>
                     )}
-                    onChange={handleFundingSourceChange}
-                    options={fundingSourceOptions}
-                    placeholder="Please select"
-                    isMulti={true}
-                  />
-                </div>
+                  </>
+                )}
+              />
+            </div>
+          </div>
 
-                {/* BBE Transaction */}
-                <div className="space-y-2">
-                  <Label htmlFor="bbeTransaction">
-                    BBE transaction (average monthly amount)
-                  </Label>
-                  <CustomSelect
-                    value={(() => {
-                      const found = amountOptions.find(
-                        (opt) => opt.value === formData.bbeTransaction
-                      );
-                      return found ? found : null;
-                    })()}
-                    onChange={handleBBETransactionChange}
-                    options={amountOptions}
-                    placeholder="R"
-                  />
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            {/* Average Transaction Amount */}
+            <div className="space-y-2">
+              <Label htmlFor="averageTransactionAmount">Average transaction amount</Label>
+              <Controller
+                name="averageTransactionAmount"
+                control={control}
+                render={({ field }) => (
+                  <>
+                    <CustomSelect
+                      value={(() => {
+                        const found = amountRangeOptions.find(
+                          (opt) => opt.value === field.value
+                        );
+                        return found ? found : null;
+                      })()}
+                      onChange={(option: any) => {
+                        const selected = Array.isArray(option) ? option[0] : option;
+                        field.onChange(selected ? selected.value : "");
+                      }}
+                      options={amountRangeOptions}
+                      placeholder="Please select"
+                    />
+                    {errors.averageTransactionAmount && (
+                      <p className="text-sm text-red-500">
+                        {errors.averageTransactionAmount.message}
+                      </p>
+                    )}
+                  </>
+                )}
+              />
+            </div>
 
-              {/* Profit and Irregular Income */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Profit from Business Activity */}
-                <div className="space-y-2">
-                  <Label htmlFor="profitFromBusiness">
-                    Profit from business activity (average monthly amount)
-                  </Label>
-                  <CustomSelect
-                    value={(() => {
-                      const found = amountOptions.find(
-                        (opt) => opt.value === formData.profitFromBusiness
-                      );
-                      return found ? found : null;
-                    })()}
-                    onChange={handleProfitFromBusinessChange}
-                    options={amountOptions}
-                    placeholder="R"
-                  />
-                </div>
+            {/* Irregular Income */}
+            <div className="space-y-2">
+              <Label htmlFor="irregularIncome">Irregular income</Label>
+              <Controller
+                name="irregularIncome"
+                control={control}
+                render={({ field }) => (
+                  <>
+                    <CustomSelect
+                      value={(() => {
+                        const found = amountRangeOptions.find(
+                          (opt) => opt.value === field.value
+                        );
+                        return found ? found : null;
+                      })()}
+                      onChange={(option: any) => {
+                        const selected = Array.isArray(option) ? option[0] : option;
+                        field.onChange(selected ? selected.value : "");
+                      }}
+                      options={amountRangeOptions}
+                      placeholder="Please select"
+                    />
+                    {errors.irregularIncome && (
+                      <p className="text-sm text-red-500">
+                        {errors.irregularIncome.message}
+                      </p>
+                    )}
+                  </>
+                )}
+              />
+            </div>
+          </div>
 
-                {/* Irregular Income */}
-                <div className="space-y-2">
-                  <Label htmlFor="irregularIncome">
-                    Irregular income (average monthly amount)
-                  </Label>
-                  <CustomSelect
-                    value={(() => {
-                      const found = amountOptions.find(
-                        (opt) => opt.value === formData.irregularIncome
-                      );
-                      return found ? found : null;
-                    })()}
-                    onChange={handleIrregularIncomeChange}
-                    options={amountOptions}
-                    placeholder="R"
-                  />
-                </div>
-              </div>
-            </>
-          )}
+          {/* Funding Source */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="space-y-2">
+              <Label htmlFor="fundingSource">
+                How are you funding your business (choose one or more)
+              </Label>
+              <Controller
+                name="fundingSource"
+                control={control}
+                render={({ field }) => (
+                  <>
+                    <CustomSelect
+                      value={businessFundingOptions.filter((opt) =>
+                        field.value && field.value.includes(opt.value)
+                      )}
+                      onChange={(options: any) => {
+                        const selected = Array.isArray(options) ? options : [];
+                        field.onChange(selected.map((opt: any) => opt.value));
+                      }}
+                      options={businessFundingOptions}
+                      placeholder="Please select"
+                      isMulti={true}
+                    />
+                    {errors.fundingSource && (
+                      <p className="text-sm text-red-500">
+                        {errors.fundingSource.message}
+                      </p>
+                    )}
+                  </>
+                )}
+              />
+            </div>
+          </div>
         </div>
+
         <div className="flex flex-col md:flex-row gap-3 !mt-12">
-            <Button variant="outline" className="w-full md:max-w-40">Back</Button>
-            <Button className="w-full md:max-w-40">Next</Button>
+          <Button variant="outline" className="w-full md:max-w-40" onClick={onBack}>
+            Back
+          </Button>
+          <Button 
+            className="w-full md:max-w-40" 
+            onClick={async () => {
+              const isValid = await (window as any).__companyFinancialInfoValidate?.();
+              if (isValid && onNext) onNext();
+            }}
+            disabled={isValidating}
+          >
+            {isValidating ? "Validating..." : "Next"}
+          </Button>
         </div>
       </div>
     </div>

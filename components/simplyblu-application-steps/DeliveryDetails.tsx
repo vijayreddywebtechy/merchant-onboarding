@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+"use client";
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Info } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -13,52 +17,99 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { House, Search } from 'lucide-react';
+import { deliveryDetailsSchema } from '@/lib/validationSchemas';
 
-interface DeliveryDetailsData {
+type DeliveryDetailsData = {
   deliveryLocation: 'company' | 'residential' | 'new';
   contactPersonName: string;
   contactPersonSurname: string;
   contactPersonNumber: string;
-  deliveryDate: Date | undefined;
+  deliveryDate: Date;
   addressSearch: string;
   streetNumber: string;
   suburb: string;
-  complexName: string;
+  complexName?: string;
   province: string;
   cityTown: string;
-  postalCode: string;
+  postalCode?: string;
+};
+
+interface Props {
+  onNext?: () => void;
+  onBack?: () => void;
 }
 
-export default function DeliveryDetails() {
-  const [formData, setFormData] = useState<DeliveryDetailsData>({
-    deliveryLocation: 'company',
-    contactPersonName: 'e.g Simz',
-    contactPersonSurname: 'e.g Shabalala',
-    contactPersonNumber: 'e.g 074 567 345',
-    deliveryDate: undefined,
-    addressSearch: '',
-    streetNumber: '',
-    suburb: '',
-    complexName: '',
-    province: '',
-    cityTown: '',
-    postalCode: '',
+export default function DeliveryDetails({ onNext, onBack }: Props) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [companyAddress, setCompanyAddress] = React.useState<any>(null);
+  const [residentialAddress, setResidentialAddress] = React.useState<any>(null);
+
+  const {
+    control,
+    formState: { errors, isValidating },
+    watch,
+    handleSubmit,
+    reset,
+  } = useForm<DeliveryDetailsData>({
+    resolver: yupResolver(deliveryDetailsSchema) as any,
+    mode: "onChange",
+    defaultValues: {
+      deliveryLocation: 'company',
+      contactPersonName: '',
+      contactPersonSurname: '',
+      contactPersonNumber: '',
+      deliveryDate: undefined as any,
+      addressSearch: '',
+      streetNumber: '',
+      suburb: '',
+      complexName: '',
+      province: '',
+      cityTown: '',
+      postalCode: '',
+    },
   });
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  React.useEffect(() => {
+    const data = localStorage.getItem("deliveryDetailsFormData");
+    if (data) {
+      reset(JSON.parse(data));
+    }
+    
+    // Load company address from CompanyDetails
+    const companyData = localStorage.getItem("companyDetailsFormData");
+    if (companyData) {
+      setCompanyAddress(JSON.parse(companyData));
+    }
+    
+    // Load residential address from PersonalInfo
+    const personalData = localStorage.getItem("personalDetailsFormData");
+    if (personalData) {
+      setResidentialAddress(JSON.parse(personalData));
+    }
+  }, [reset]);
 
-  const handleRadioChange = (value: string): void => {
-    setFormData(prev => ({
-      ...prev,
-      deliveryLocation: value as 'company' | 'residential' | 'new',
-    }));
-  };
+  const deliveryLocation = watch("deliveryLocation");
+
+  // Save form data in real-time to localStorage
+  useEffect(() => {
+    const subscription = watch((data) => {
+      localStorage.setItem("deliveryDetailsFormData", JSON.stringify(data));
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
+
+  // Expose validation through window object for Stepper to call
+  useEffect(() => {
+    (window as any).__deliveryDetailsValidate = async () => {
+      const isValid = await new Promise<boolean>((resolve) => {
+        handleSubmit(
+          () => resolve(true),
+          () => resolve(false)
+        )();
+      });
+      return isValid;
+    };
+  }, [handleSubmit]);
 
   return (
     <div className="py-6 md:py-8">
@@ -79,48 +130,84 @@ export default function DeliveryDetails() {
           <Label className="font-medium">
             Where would you like your card machines(s) to be delivered?
           </Label>
-          <RadioGroup
-            value={formData.deliveryLocation}
-            onValueChange={handleRadioChange}
-            className="flex flex-col sm:flex-row gap-4"
-          >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="company" id="location-company" />
-              <Label htmlFor="location-company" className="cursor-pointer">
-                Company trading address
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="residential" id="location-residential" />
-              <Label htmlFor="location-residential" className="cursor-pointer">
-                Residential address
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="new" id="location-new" />
-              <Label htmlFor="location-new" className="cursor-pointer">
-                Add new address
-              </Label>
-            </div>
-          </RadioGroup>
+          <Controller
+            name="deliveryLocation"
+            control={control}
+            render={({ field }) => (
+              <>
+                <RadioGroup
+                  value={field.value}
+                  onValueChange={(value) => field.onChange(value as 'company' | 'residential' | 'new')}
+                  className="flex flex-col sm:flex-row gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="company" id="location-company" />
+                    <Label htmlFor="location-company" className="cursor-pointer">
+                      Company trading address
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="residential" id="location-residential" />
+                    <Label htmlFor="location-residential" className="cursor-pointer">
+                      Residential address
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="new" id="location-new" />
+                    <Label htmlFor="location-new" className="cursor-pointer">
+                      Add new address
+                    </Label>
+                  </div>
+                </RadioGroup>
+                {errors.deliveryLocation && (
+                  <p className="text-sm text-red-500">{errors.deliveryLocation.message}</p>
+                )}
+              </>
+            )}
+          />
         </div>
 
         {/* Address Display - Only show for company or residential */}
-        {formData.deliveryLocation !== 'new' && (
+        {deliveryLocation !== 'new' && (
           <div className="bg-primary-dark text-white rounded-lg mb-8 flex items-center gap-4">
             <div className="flex-shrink-0 p-6 bg-blue-800 rounded-l-lg">
               <House className="w-8 h-8" />
             </div>
             <div className='p-2'>
               <p className="text-lg">
-                25 B Katjiepiering Crescent, Amelia, Johannesburg, 0157
+                {deliveryLocation === 'company' ? (
+                  companyAddress ? (
+                    <>
+                      {companyAddress.streetNumber && <span>{companyAddress.streetNumber}</span>}
+                      {companyAddress.suburb && <span>, {companyAddress.suburb}</span>}
+                      {companyAddress.complexName && <span>, {companyAddress.complexName}</span>}
+                      {companyAddress.cityTown && <span>, {companyAddress.cityTown}</span>}
+                      {companyAddress.postalCode && <span>, {companyAddress.postalCode}</span>}
+                    </>
+                  ) : (
+                    "Company address not found"
+                  )
+                ) : (
+                  residentialAddress ? (
+                    <>
+                      {residentialAddress.street && <span>{residentialAddress.street}</span>}
+                      {residentialAddress.unit && <span>, {residentialAddress.unit}</span>}
+                      {residentialAddress.buildingName && <span>, {residentialAddress.buildingName}</span>}
+                      {residentialAddress.suburb && <span>, {residentialAddress.suburb}</span>}
+                      {residentialAddress.city && <span>, {residentialAddress.city}</span>}
+                      {residentialAddress.postalCode && <span>, {residentialAddress.postalCode}</span>}
+                    </>
+                  ) : (
+                    "Residential address not found"
+                  )
+                )}
               </p>
             </div>
           </div>
         )}
 
         {/* New Address Form - Only show when 'new' is selected */}
-        {formData.deliveryLocation === 'new' && (
+        {deliveryLocation === 'new' && (
           <div className="mb-8 space-y-6">
             {/* Address Search */}
             <div className="space-y-2">
@@ -128,14 +215,23 @@ export default function DeliveryDetails() {
                 Enter your address
               </Label>
               <div className="relative">
-                <Input
-                  type="text"
-                  id="addressSearch"
+                <Controller
                   name="addressSearch"
-                  value={formData.addressSearch}
-                  onChange={handleInputChange}
-                  placeholder="Enter your address"
-                  className="pr-12"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <Input
+                        type="text"
+                        id="addressSearch"
+                        {...field}
+                        placeholder="Enter your address"
+                        className="pr-12"
+                      />
+                      {errors.addressSearch && (
+                        <p className="text-sm text-red-500">{errors.addressSearch.message}</p>
+                      )}
+                    </>
+                  )}
                 />
                 <button
                   className="absolute right-0 top-0 h-full px-4 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 transition-colors flex items-center justify-center"
@@ -151,13 +247,22 @@ export default function DeliveryDetails() {
                 <Label htmlFor="streetNumber">
                   Street number and name
                 </Label>
-                <Input
-                  type="text"
-                  id="streetNumber"
+                <Controller
                   name="streetNumber"
-                  value={formData.streetNumber}
-                  onChange={handleInputChange}
-                  placeholder="e.g 134 Raglan street"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <Input
+                        type="text"
+                        id="streetNumber"
+                        {...field}
+                        placeholder="e.g 134 Raglan street"
+                      />
+                      {errors.streetNumber && (
+                        <p className="text-sm text-red-500">{errors.streetNumber.message}</p>
+                      )}
+                    </>
+                  )}
                 />
               </div>
 
@@ -165,13 +270,22 @@ export default function DeliveryDetails() {
                 <Label htmlFor="suburb">
                   Suburb
                 </Label>
-                <Input
-                  type="text"
-                  id="suburb"
+                <Controller
                   name="suburb"
-                  value={formData.suburb}
-                  onChange={handleInputChange}
-                  placeholder="e.g Sandton"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <Input
+                        type="text"
+                        id="suburb"
+                        {...field}
+                        placeholder="e.g Sandton"
+                      />
+                      {errors.suburb && (
+                        <p className="text-sm text-red-500">{errors.suburb.message}</p>
+                      )}
+                    </>
+                  )}
                 />
               </div>
             </div>
@@ -181,13 +295,17 @@ export default function DeliveryDetails() {
               <Label htmlFor="complexName">
                 Complex/Building name (optional)
               </Label>
-              <Input
-                type="text"
-                id="complexName"
+              <Controller
                 name="complexName"
-                value={formData.complexName}
-                onChange={handleInputChange}
-                placeholder="e.g Green Valley Complex"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    type="text"
+                    id="complexName"
+                    {...field}
+                    placeholder="e.g Green Valley Complex"
+                  />
+                )}
               />
             </div>
 
@@ -197,13 +315,22 @@ export default function DeliveryDetails() {
                 <Label htmlFor="province">
                   Province
                 </Label>
-                <Input
-                  type="text"
-                  id="province"
+                <Controller
                   name="province"
-                  value={formData.province}
-                  onChange={handleInputChange}
-                  placeholder="e.g Gauteng"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <Input
+                        type="text"
+                        id="province"
+                        {...field}
+                        placeholder="e.g Gauteng"
+                      />
+                      {errors.province && (
+                        <p className="text-sm text-red-500">{errors.province.message}</p>
+                      )}
+                    </>
+                  )}
                 />
               </div>
 
@@ -211,13 +338,22 @@ export default function DeliveryDetails() {
                 <Label htmlFor="cityTown">
                   City/town
                 </Label>
-                <Input
-                  type="text"
-                  id="cityTown"
+                <Controller
                   name="cityTown"
-                  value={formData.cityTown}
-                  onChange={handleInputChange}
-                  placeholder="e.g Johannesburg"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <Input
+                        type="text"
+                        id="cityTown"
+                        {...field}
+                        placeholder="e.g Johannesburg"
+                      />
+                      {errors.cityTown && (
+                        <p className="text-sm text-red-500">{errors.cityTown.message}</p>
+                      )}
+                    </>
+                  )}
                 />
               </div>
             </div>
@@ -227,13 +363,22 @@ export default function DeliveryDetails() {
               <Label htmlFor="postalCode">
                 Postal code
               </Label>
-              <Input
-                type="text"
-                id="postalCode"
+              <Controller
                 name="postalCode"
-                value={formData.postalCode}
-                onChange={handleInputChange}
-                placeholder="e.g 2011"
+                control={control}
+                render={({ field }) => (
+                  <>
+                    <Input
+                      type="text"
+                      id="postalCode"
+                      {...field}
+                      placeholder="e.g 2011"
+                    />
+                    {errors.postalCode && (
+                      <p className="text-sm text-red-500">{errors.postalCode.message}</p>
+                    )}
+                  </>
+                )}
               />
             </div>
           </div>
@@ -251,13 +396,22 @@ export default function DeliveryDetails() {
                 <Label htmlFor="contactPersonName" className="text-sm text-gray-700">
                   Contact person name
                 </Label>
-                <Input
-                  type="text"
-                  id="contactPersonName"
+                <Controller
                   name="contactPersonName"
-                  value={formData.contactPersonName}
-                  onChange={handleInputChange}
-                  placeholder="e.g Simz"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <Input
+                        type="text"
+                        id="contactPersonName"
+                        {...field}
+                        placeholder="e.g Simz"
+                      />
+                      {errors.contactPersonName && (
+                        <p className="text-sm text-red-500">{errors.contactPersonName.message}</p>
+                      )}
+                    </>
+                  )}
                 />
                 <p className="text-xs text-gray-600">
                   The person expected to receive the card machine(s) upon delivery
@@ -268,13 +422,22 @@ export default function DeliveryDetails() {
                 <Label htmlFor="contactPersonSurname" className="text-sm text-gray-700">
                   Contact person surname
                 </Label>
-                <Input
-                  type="text"
-                  id="contactPersonSurname"
+                <Controller
                   name="contactPersonSurname"
-                  value={formData.contactPersonSurname}
-                  onChange={handleInputChange}
-                  placeholder="e.g Shabalala"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <Input
+                        type="text"
+                        id="contactPersonSurname"
+                        {...field}
+                        placeholder="e.g Shabalala"
+                      />
+                      {errors.contactPersonSurname && (
+                        <p className="text-sm text-red-500">{errors.contactPersonSurname.message}</p>
+                      )}
+                    </>
+                  )}
                 />
               </div>
             </div>
@@ -285,13 +448,22 @@ export default function DeliveryDetails() {
                 <Label htmlFor="contactPersonNumber" className="text-sm text-gray-700">
                   Contact person number
                 </Label>
-                <Input
-                  type="tel"
-                  id="contactPersonNumber"
+                <Controller
                   name="contactPersonNumber"
-                  value={formData.contactPersonNumber}
-                  onChange={handleInputChange}
-                  placeholder="e.g 074 567 345"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <Input
+                        type="tel"
+                        id="contactPersonNumber"
+                        {...field}
+                        placeholder="e.g 074 567 345"
+                      />
+                      {errors.contactPersonNumber && (
+                        <p className="text-sm text-red-500">{errors.contactPersonNumber.message}</p>
+                      )}
+                    </>
+                  )}
                 />
                 <p className="text-xs text-gray-600">
                   The person expected to receive the card machine(s) upon delivery
@@ -302,45 +474,51 @@ export default function DeliveryDetails() {
                 <Label htmlFor="deliveryDate" className="text-sm text-gray-700">
                   Delivery date
                 </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "h-12 w-full justify-between text-left font-normal rounded-lg border border-neutral-700 hover:border-primary focus:border-primary focus:outline-none bg-background px-3 py-2 text-sm md:text-base text-secondary",
-                        !formData.deliveryDate && "text-neutral-700"
+                <Controller
+                  name="deliveryDate"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "h-12 w-full justify-between text-left font-normal rounded-lg border border-neutral-700 hover:border-primary focus:border-primary focus:outline-none bg-background px-3 py-2 text-sm md:text-base text-secondary",
+                              !field.value && "text-neutral-700"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Select</span>
+                            )}
+                            <CalendarIcon className="ml-2 h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => {
+                              const today = new Date();
+                              const tomorrow = new Date(today);
+                              tomorrow.setDate(tomorrow.getDate() + 1);
+                              
+                              // Disable today and tomorrow
+                              return date < new Date(tomorrow.setHours(0, 0, 0, 0));
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {errors.deliveryDate && (
+                        <p className="text-sm text-red-500">{errors.deliveryDate.message}</p>
                       )}
-                    >
-                      {formData.deliveryDate ? (
-                        format(formData.deliveryDate, "PPP")
-                      ) : (
-                        <span>Select</span>
-                      )}
-                      <CalendarIcon className="ml-2 h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={formData.deliveryDate}
-                      onSelect={(date) => 
-                        setFormData(prev => ({
-                          ...prev,
-                          deliveryDate: date
-                        }))
-                      }
-                      disabled={(date) => {
-                        const today = new Date();
-                        const tomorrow = new Date(today);
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        
-                        // Disable today and tomorrow
-                        return date < new Date(tomorrow.setHours(0, 0, 0, 0));
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                    </>
+                  )}
+                />
                 <p className="text-xs text-gray-600">
                   Today and tomorrow are disabled for selection
                 </p>
@@ -358,10 +536,22 @@ export default function DeliveryDetails() {
             If your application is successful, your delivery will be processed after 48 hours.
           </p>
         </div>
-                <div className="flex flex-col md:flex-row gap-3 !mt-12">
-                    <Button variant="outline" className="w-full md:max-w-40">Back</Button>
-                    <Button className="w-full md:max-w-40">Next</Button>
-                </div>
+
+        <div className="flex flex-col md:flex-row gap-3 !mt-12">
+          <Button variant="outline" className="w-full md:max-w-40" onClick={onBack} disabled={isValidating}>
+            Back
+          </Button>
+          <Button 
+            className="w-full md:max-w-40" 
+            onClick={async () => {
+              const isValid = await (window as any).__deliveryDetailsValidate?.();
+              if (isValid && onNext) onNext();
+            }}
+            disabled={isValidating}
+          >
+            {isValidating ? "Validating..." : "Next"}
+          </Button>
+        </div>
       </div>
     </div>
   );

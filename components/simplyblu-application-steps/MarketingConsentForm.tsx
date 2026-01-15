@@ -1,28 +1,207 @@
-import React, { useState } from "react";
+"use client";
+
+import React, { useEffect, useRef, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Props } from "react-select";
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { marketingConsentSchema } from "@/lib/validationSchemas";
+import { useCustomMutation } from "@/hooks/useCustomMutation";
+import { updateCompanyDetailsWithConsent, buildRelatedPartiesUpdatePayload } from "@/lib/apiTransformers";
+import axios from "axios";
 
-interface MarketingConsentData {
-  dataSharingGroup: string;
-  dataSharingThirdParty: string;
-  dataSharingBoarders: string;
+type MarketingConsentData = {
+  smsConsent: string;
+  emailConsent: string;
+  termsConsent: boolean;
+};
+
+interface Props {
+  onNext?: () => void;
+  onBack?: () => void;
 }
 
-const MarketingConsentForm = (props: Props) => {
-  const [formData, setFormData] = useState<MarketingConsentData>({
-    dataSharingGroup: "",
-    dataSharingThirdParty: "",
-    dataSharingBoarders: "",
+const MarketingConsentForm = ({ onNext, onBack }: Props) => {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiStep, setApiStep] = useState(0);
+
+  const { mutate: updateCompanyDetails } = useCustomMutation({
+    url: `/api/company-details`,
+    method: "PUT",
   });
 
-  const handleRadioChange = (name: string, value: string): void => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  const { mutate: updateRelatedParties } = useCustomMutation({
+    url: `/api/related-parties-update`,
+    method: "PUT",
+  });
+
+  const {
+    control,
+    formState: { errors, isValidating },
+    handleSubmit,
+    watch,
+    reset,
+  } = useForm<MarketingConsentData>({
+    resolver: yupResolver(marketingConsentSchema) as any,
+    mode: "onChange",
+    defaultValues: {
+      smsConsent: "",
+      emailConsent: "",
+      termsConsent: false,
+    },
+  });
+
+  React.useEffect(() => {
+    const data = localStorage.getItem("marketingConsentFormData");
+    if (data) {
+      reset(JSON.parse(data));
+    }
+  }, [reset]);
+
+  // Sequential API execution
+  useEffect(() => {
+    const executeSequentialAPIs = async () => {
+      if (apiStep === 1) {
+        // Step 2: Get Related Parties after company details updated
+        try {
+          const token = sessionStorage.getItem("ping_access_token_data");
+          const accessToken = token ? JSON.parse(token).access_token : null;
+          const preApplicationResponse = JSON.parse(localStorage.getItem("preApplicationResponse") || "{}");
+          const customerUUID = preApplicationResponse.businessBPGUID;
+          
+          const response = await axios.get(
+            `/api/related-parties?customerUUID=${customerUUID}`,
+            {
+              headers: {
+                ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
+              },
+            }
+          );
+          console.log("Related parties fetched:", response.data);
+          
+          // Store the related parties data for next step
+          localStorage.setItem("relatedPartiesData", JSON.stringify(response.data));
+          
+          setApiStep(2); // Move to step 2: Update related parties
+        } catch (error) {
+          console.error("Error fetching related parties:", error);
+          setIsLoading(false);
+        }
+      } else if (apiStep === 2) {
+        // Step 3: Update Related Parties
+        const preApplicationResponse = JSON.parse(localStorage.getItem("preApplicationResponse") || "{}");
+        const relatedPartiesResponse = JSON.parse(localStorage.getItem("relatedPartiesData") || "{}");
+        const relatedPartiesData = relatedPartiesResponse.mandRelatedPart || [];
+        const initiatorBPGUID = preApplicationResponse.initiators?.[0]?.initiatorBPGUID;
+        const inflightCustomerDataID = preApplicationResponse.inflightCustomerDataId;
+        
+        console.log("Related Parties Data from GET:", relatedPartiesResponse);
+        console.log("Initiator BPGUID:", initiatorBPGUID);
+        console.log("Inflight Customer Data ID:", inflightCustomerDataID);
+        
+        const updatePayload = buildRelatedPartiesUpdatePayload(
+          relatedPartiesData,
+          initiatorBPGUID,
+          inflightCustomerDataID
+        );
+        
+        console.log("Update Related Parties Payload:", JSON.stringify(updatePayload, null, 2));
+        
+        updateRelatedParties({ body: updatePayload }, {
+          onSuccess: () => {
+            setIsLoading(false);
+            setApiStep(3);
+          },
+          onError: () => {
+            setIsLoading(false);
+            setApiStep(3);
+          }
+        });
+      } else if (apiStep === 3) {
+        // All APIs completed, navigate to next step
+        if (onNext) {
+          onNext();
+        }
+      }
+    };
+
+    if (apiStep > 0) {
+      executeSequentialAPIs();
+    }
+  }, [apiStep, updateRelatedParties, onNext]);
+
+  // Save form data in real-time to localStorage
+  useEffect(() => {
+    const subscription = watch((data) => {
+      localStorage.setItem("marketingConsentFormData", JSON.stringify(data));
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
+
+  // Expose validation through window object for Stepper to call
+  useEffect(() => {
+    (window as any).__marketingConsentValidate = async () => {
+      const isValid = await new Promise<boolean>((resolve) => {
+        handleSubmit(
+          () => resolve(true),
+          () => resolve(false)
+        )();
+      });
+      return isValid;
+    };
+  }, [handleSubmit]);
+
+  const handleFormSubmit = async (data: MarketingConsentData) => {
+    setIsLoading(true);
+    setApiStep(0);
+    
+    console.log("Marketing consent data:", data);
+    localStorage.setItem("marketingConsentFormData", JSON.stringify(data));
+
+    // Get the previously saved company details payload
+    const savedPayload = localStorage.getItem("companyDetailsPayload");
+    
+    if (!savedPayload) {
+      console.error("No company details payload found. Proceeding without API call.");
+      setIsLoading(false);
+      if (onNext) {
+        onNext();
+      }
+      return;
+    }
+
+    const companyPayload = JSON.parse(savedPayload);
+    
+    // Build consent data
+    const consentData = {
+      consentForSharing: data.smsConsent === "yes" || data.emailConsent === "yes",
+      consentForThirdPartySharing: data.termsConsent,
+      consentForCrossBorderSharing: false,
+    };
+
+    // Update consent fields in the payload
+    const updatedPayload = updateCompanyDetailsWithConsent(companyPayload, consentData);
+
+    console.log("Updated company payload with consent:", updatedPayload);
+
+    // Step 1: Update Company Details with consent values
+    updateCompanyDetails({ body: updatedPayload }, {
+      onSuccess: (res) => {
+        console.log("Company details updated with consent:", res);
+        setApiStep(1); // Move to step 1: Get related parties
+      },
+      onError: (error) => {
+        console.error("Error updating company details:", error);
+        setIsLoading(false);
+        // Proceed anyway
+        if (onNext) {
+          onNext();
+        }
+      }
+    });
   };
 
   return (
@@ -40,130 +219,142 @@ const MarketingConsentForm = (props: Props) => {
 
         {/* Form Sections */}
         <div className="space-y-8">
-          {/* Data Sharing within Our Group */}
+          {/* SMS Consent */}
           <div className="space-y-4">
             <h2 className="text-base font-medium text-gray-700">
-              Data Sharing within Our Group
+              SMS Marketing Consent
             </h2>
             <p className="text-sm text-gray-700 leading-relaxed">
-              A member of{" "}
-              <a href="#" className="text-blue-600 hover:underline">
-                The Group
-              </a>{" "}
-              may wish to bring you exclusive offers and/or services that may
-              benefit you. Are you happy for us to share your data within our
-              group for this purpose?
+              May we send you SMS notifications about special offers and promotions?
             </p>
-            <RadioGroup
-              value={formData.dataSharingGroup}
-              onValueChange={(value) =>
-                handleRadioChange("dataSharingGroup", value)
-              }
-              className="flex gap-6 pt-2"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="yes" id="group-yes" />
-                <Label
-                  htmlFor="group-yes"
-                  className="font-normal cursor-pointer text-gray-700"
-                >
-                  Yes
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="no" id="group-no" />
-                <Label
-                  htmlFor="group-no"
-                  className="font-normal cursor-pointer text-gray-700"
-                >
-                  No
-                </Label>
-              </div>
-            </RadioGroup>
+            <Controller
+              name="smsConsent"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <RadioGroup
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    className="flex gap-6 pt-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="yes" id="sms-yes" />
+                      <Label
+                        htmlFor="sms-yes"
+                        className="font-normal cursor-pointer text-gray-700"
+                      >
+                        Yes
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="no" id="sms-no" />
+                      <Label
+                        htmlFor="sms-no"
+                        className="font-normal cursor-pointer text-gray-700"
+                      >
+                        No
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {errors.smsConsent && (
+                    <p className="text-sm text-red-500">
+                      {errors.smsConsent.message}
+                    </p>
+                  )}
+                </>
+              )}
+            />
           </div>
 
           {/* Divider */}
           <div className="border-t border-gray-200"></div>
 
-          {/* Data Sharing with Third Parties */}
+          {/* Email Consent */}
           <div className="space-y-4">
             <h2 className="text-base font-medium text-gray-700">
-              Data Sharing with Third Parties
+              Email Marketing Consent
             </h2>
             <p className="text-sm text-gray-700 leading-relaxed">
-              We may partner with third parties outside of our Group in order to
-              bring you exclusive offers and/or services that may benefit you.
-              Are you happy for us to share your data with these third parties
-              for this purpose?
+              May we send you email notifications about special offers and promotions?
             </p>
-            <RadioGroup
-              value={formData.dataSharingThirdParty}
-              onValueChange={(value) =>
-                handleRadioChange("dataSharingThirdParty", value)
-              }
-              className="flex gap-6 pt-2"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="yes" id="third-party-yes" />
-                <Label
-                  htmlFor="third-party-yes"
-                  className="font-normal cursor-pointer text-gray-700"
-                >
-                  Yes
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="no" id="third-party-no" />
-                <Label
-                  htmlFor="third-party-no"
-                  className="font-normal cursor-pointer text-gray-700"
-                >
-                  No
-                </Label>
-              </div>
-            </RadioGroup>
+            <Controller
+              name="emailConsent"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <RadioGroup
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    className="flex gap-6 pt-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="yes" id="email-yes" />
+                      <Label
+                        htmlFor="email-yes"
+                        className="font-normal cursor-pointer text-gray-700"
+                      >
+                        Yes
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="no" id="email-no" />
+                      <Label
+                        htmlFor="email-no"
+                        className="font-normal cursor-pointer text-gray-700"
+                      >
+                        No
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {errors.emailConsent && (
+                    <p className="text-sm text-red-500">
+                      {errors.emailConsent.message}
+                    </p>
+                  )}
+                </>
+              )}
+            />
           </div>
 
           {/* Divider */}
           <div className="border-t border-gray-200"></div>
 
-          {/* Data Sharing Across Boarders Within The Group */}
+          {/* Terms Consent */}
           <div className="space-y-4">
             <h2 className="text-base font-medium text-gray-700">
-              Data Sharing Across Boarders Within The Group
+              Terms and Conditions
             </h2>
             <p className="text-sm text-gray-700 leading-relaxed">
-              A member of The group outside of this country may wish to send you
-              exclusive offers and/or services that may benefit you. your
-              information will be protected the same way it is protected
-              locally. are you happy for us to share your data for this purpose?
+              I accept the terms and conditions of this service.
             </p>
-            <RadioGroup
-              value={formData.dataSharingBoarders}
-              onValueChange={(value) =>
-                handleRadioChange("dataSharingBoarders", value)
-              }
-              className="flex gap-6 pt-2"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="yes" id="boarders-yes" />
-                <Label
-                  htmlFor="boarders-yes"
-                  className="font-normal cursor-pointer text-gray-700"
-                >
-                  Yes
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="no" id="boarders-no" />
-                <Label
-                  htmlFor="boarders-no"
-                  className="font-normal cursor-pointer text-gray-700"
-                >
-                  No
-                </Label>
-              </div>
-            </RadioGroup>
+            <Controller
+              name="termsConsent"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="termsConsent"
+                      checked={field.value}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300"
+                    />
+                    <Label
+                      htmlFor="termsConsent"
+                      className="font-normal cursor-pointer text-gray-700"
+                    >
+                      I accept the terms and conditions
+                    </Label>
+                  </div>
+                  {errors.termsConsent && (
+                    <p className="text-sm text-red-500">
+                      {errors.termsConsent.message}
+                    </p>
+                  )}
+                </>
+              )}
+            />
           </div>
 
           {/* Information Notice */}
@@ -173,22 +364,33 @@ const MarketingConsentForm = (props: Props) => {
             </div>
             <p className="text-sm text-blue-900 leading-relaxed">
               Please note that you have the right to change your consent and
-              preferences at any time in the future at any branch, by contacting
-              your relationship manager, calling us on 0860 123 000, emailing us
-              on{" "}
-              <a
-                href="mailto:information@standardbank.co.za"
-                className="text-blue-600 hover:underline font-medium break-words"
-              >
-                information@standardbank.co.za
-              </a>{" "}
-              or logging to our banking channels to update your preferences.
+              preferences at any time in the future by contacting us.
             </p>
           </div>
         </div>
-                <div className="flex flex-col md:flex-row gap-3 !mt-12">
-            <Button variant="outline" className="w-full md:max-w-40">Back</Button>
-            <Button className="w-full md:max-w-40">Next</Button>
+
+        <div className="flex flex-col md:flex-row gap-3 !mt-12">
+          <Button 
+            variant="outline" 
+            className="w-full md:max-w-40" 
+            onClick={onBack} 
+            disabled={isLoading}
+          >
+            Back
+          </Button>
+          <Button 
+            className="w-full md:max-w-40" 
+            onClick={async () => {
+              const isValid = await (window as any).__marketingConsentValidate?.();
+              if (isValid) {
+                const formData = watch();
+                handleFormSubmit(formData);
+              }
+            }}
+            disabled={isLoading}
+          >
+            {isLoading ? "Processing..." : "Next"}
+          </Button>
         </div>
       </div>
     </div>

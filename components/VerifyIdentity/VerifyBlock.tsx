@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import VerificationStatus from "./VerificationStation";
 import Instructions from "./Instructions";
 
-type Props = {};
+type Props = {
+  onNext?: () => void;
+};
 
 const VerifyBlock = (props: Props) => {
   return (
@@ -22,7 +24,7 @@ const VerifyBlock = (props: Props) => {
           <Instructions />
 
           {/* Successfull */}
-          <VerificationStatus />
+          <VerificationStatus onNext={props.onNext} />
         </div>
       </div>
     </div>

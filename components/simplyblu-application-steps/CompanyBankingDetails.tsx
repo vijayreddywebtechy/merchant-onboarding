@@ -1,11 +1,16 @@
-import React, { useState, ChangeEvent } from "react";
+"use client";
+
+import React, { useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import CustomSelect from "@/components/dynamic/CustomSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { bankingDetailsSchema } from "@/lib/validationSchemas";
 
-interface BankingDetailsData {
+type BankingDetailsData = {
   estimatedTurnover: string;
   bankName: string;
   accountHolderName: string;
@@ -13,9 +18,12 @@ interface BankingDetailsData {
   accountNumber: string;
   branchName: string;
   branchCode: string;
-}
+};
 
-type Props = {};
+interface CompanyBankingDetailsProps {
+  onNext?: (data: BankingDetailsData) => Promise<void>;
+  onBack?: () => void;
+}
 
 // Bank name options
 const bankNameOptions = [
@@ -40,58 +48,58 @@ const accountTypeOptions = [
   { value: "Personal Cheque Account", label: "Personal Cheque Account" },
 ];
 
-const CompanyBankingDetails = (props: Props) => {
-  const [formData, setFormData] = useState<BankingDetailsData>({
-    estimatedTurnover: "R 300 000",
-    bankName: "Nedbank",
-    accountHolderName: "e.g John Doe",
-    accountType: "",
-    accountNumber: "e.g 51234652",
-    branchName: "",
-    branchCode: "0123456",
+const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) => {
+  const formRef = React.useRef<HTMLFormElement>(null);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    control,
+    watch,
+    reset,
+  } = useForm({
+    resolver: yupResolver(bankingDetailsSchema) as any,
+    mode: "onChange",
+    defaultValues: {
+      estimatedTurnover: "",
+      bankName: "",
+      accountHolderName: "",
+      accountType: "",
+      accountNumber: "",
+      branchName: "",
+      branchCode: "",
+    },
   });
 
-  const [showAccountTypes, setShowAccountTypes] = useState<boolean>(false);
+  React.useEffect(() => {
+    const data = localStorage.getItem("companyBankingDetailsFormData");
+    if (data) {
+      reset(JSON.parse(data));
+    }
+  }, [reset]);
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>): void => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  // Save form data in real-time to localStorage
+  useEffect(() => {
+    const subscription = watch((data) => {
+      localStorage.setItem("companyBankingDetailsFormData", JSON.stringify(data));
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
 
-  const handleBankNameChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      bankName: selected ? selected.value : "",
-    }));
-  };
+  // Expose validation through window object for Stepper to call
+  useEffect(() => {
+    (window as any).__bankingDetailsValidate = async () => {
+      const isValid = await new Promise<boolean>((resolve) => {
+        handleSubmit(
+          () => resolve(true),
+          () => resolve(false)
+        )();
+      });
+      return isValid;
+    };
+  }, [handleSubmit]);
 
-  const handleBranchNameChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      branchName: selected ? selected.value : "",
-    }));
-  };
-
-  const handleAccountTypeChange = (option: any) => {
-    const selected = Array.isArray(option) ? option[0] : option;
-    setFormData((prev) => ({
-      ...prev,
-      accountType: selected ? selected.value : "",
-    }));
-  };
-
-  const handleAccountTypeSelect = (type: string): void => {
-    setFormData((prev) => ({
-      ...prev,
-      accountType: type,
-    }));
-    setShowAccountTypes(false);
-  };
   return (
     <div className="py-6 md:py-8">
       <div className="w-full max-w-6xl mx-auto">
@@ -121,109 +129,138 @@ const CompanyBankingDetails = (props: Props) => {
               <Input
                 type="text"
                 id="estimatedTurnover"
-                name="estimatedTurnover"
-                value={formData.estimatedTurnover}
-                onChange={handleInputChange}
+                {...register("estimatedTurnover")}
+                className={errors.estimatedTurnover ? "border-red-500" : ""}
               />
+              {errors.estimatedTurnover && (
+                <p className="text-red-500 text-sm">{errors.estimatedTurnover.message as string}</p>
+              )}
             </div>
 
             {/* Bank Name */}
             <div className="space-y-2">
-              <Label htmlFor="bankName">
-                Bank name
-              </Label>
-              <CustomSelect
-                value={(() => {
-                  const found = bankNameOptions.find(
-                    (opt) => opt.value === formData.bankName
-                  );
-                  return found ? found : null;
-                })()}
-                onChange={handleBankNameChange}
-                options={bankNameOptions}
-                placeholder="Please select"
+              <Label htmlFor="bankName">Bank name</Label>
+              <Controller
+                name="bankName"
+                control={control}
+                render={({ field }) => (
+                  <CustomSelect
+                    value={(() => {
+                      const found = bankNameOptions.find(
+                        (opt) => opt.value === field.value
+                      );
+                      return found ? found : null;
+                    })()}
+                    onChange={(option) => {
+                      const selected = Array.isArray(option) ? option[0] : option;
+                      field.onChange(selected ? selected.value : "");
+                    }}
+                    options={bankNameOptions}
+                    placeholder="Please select"
+                  />
+                )}
               />
+              {errors.bankName && (
+                <p className="text-red-500 text-sm">{errors.bankName.message as string}</p>
+              )}
             </div>
 
             {/* Account Holder's Name */}
             <div className="space-y-2">
-              <Label
-                htmlFor="accountHolderName"
-
-              >
-                Account holder's name
-              </Label>
+              <Label htmlFor="accountHolderName">Account holder's name</Label>
               <Input
                 type="text"
                 id="accountHolderName"
-                name="accountHolderName"
-                value={formData.accountHolderName}
-                onChange={handleInputChange}
+                {...register("accountHolderName")}
+                className={errors.accountHolderName ? "border-red-500" : ""}
               />
+              {errors.accountHolderName && (
+                <p className="text-red-500 text-sm">{errors.accountHolderName.message as string}</p>
+              )}
             </div>
 
             {/* Account Type */}
             <div className="space-y-2">
-              <Label htmlFor="accountType">
-                Account type
-              </Label>
-              <CustomSelect
-                value={(() => {
-                  const found = accountTypeOptions.find(
-                    (opt) => opt.value === formData.accountType
-                  );
-                  return found ? found : null;
-                })()}
-                onChange={handleAccountTypeChange}
-                options={accountTypeOptions}
-                placeholder="Please select"
+              <Label htmlFor="accountType">Account type</Label>
+              <Controller
+                name="accountType"
+                control={control}
+                render={({ field }) => (
+                  <CustomSelect
+                    value={(() => {
+                      const found = accountTypeOptions.find(
+                        (opt) => opt.value === field.value
+                      );
+                      return found ? found : null;
+                    })()}
+                    onChange={(option) => {
+                      const selected = Array.isArray(option) ? option[0] : option;
+                      field.onChange(selected ? selected.value : "");
+                    }}
+                    options={accountTypeOptions}
+                    placeholder="Please select"
+                  />
+                )}
               />
+              {errors.accountType && (
+                <p className="text-red-500 text-sm">{errors.accountType.message as string}</p>
+              )}
             </div>
 
             {/* Account Number */}
             <div className="space-y-2">
-              <Label htmlFor="accountNumber">
-                Account number
-              </Label>
+              <Label htmlFor="accountNumber">Account number</Label>
               <Input
                 type="text"
                 id="accountNumber"
-                name="accountNumber"
-                value={formData.accountNumber}
-                onChange={handleInputChange}
+                {...register("accountNumber")}
+                className={errors.accountNumber ? "border-red-500" : ""}
               />
+              {errors.accountNumber && (
+                <p className="text-red-500 text-sm">{errors.accountNumber.message as string}</p>
+              )}
             </div>
 
             {/* Branch Name */}
             <div className="space-y-2">
-              <Label htmlFor="branchName">
-                Branch name
-              </Label>
-              <CustomSelect
-                value={(() => {
-                  const found = branchNameOptions.find(
-                    (opt) => opt.value === formData.branchName
-                  );
-                  return found ? found : null;
-                })()}
-                onChange={handleBranchNameChange}
-                options={branchNameOptions}
-                placeholder="Please select"
+              <Label htmlFor="branchName">Branch name</Label>
+              <Controller
+                name="branchName"
+                control={control}
+                render={({ field }) => (
+                  <CustomSelect
+                    value={(() => {
+                      const found = branchNameOptions.find(
+                        (opt) => opt.value === field.value
+                      );
+                      return found ? found : null;
+                    })()}
+                    onChange={(option) => {
+                      const selected = Array.isArray(option) ? option[0] : option;
+                      field.onChange(selected ? selected.value : "");
+                    }}
+                    options={branchNameOptions}
+                    placeholder="Please select"
+                  />
+                )}
               />
+              {errors.branchName && (
+                <p className="text-red-500 text-sm">{errors.branchName.message as string}</p>
+              )}
             </div>
 
             {/* Branch Code */}
             <div className="space-y-2">
-              <Label htmlFor="branchCode">
-                Branch code
-              </Label>
+              <Label htmlFor="branchCode">Branch code</Label>
               <Input
                 type="text"
                 id="branchCode"
-                name="branchCode"
-                value={formData.branchCode}
-                onChange={handleInputChange}
+                {...register("branchCode")}
+                className={errors.branchCode ? "border-red-500" : ""}
               />
+              {errors.branchCode && (
+                <p className="text-red-500 text-sm">{errors.branchCode.message as string}</p>
+              )}
             </div>
 
             {/* Please Note */}
@@ -312,9 +349,25 @@ const CompanyBankingDetails = (props: Props) => {
           </div>
         </div>
           <div className="flex flex-col md:flex-row gap-3 !mt-12">
-            <Button variant="outline" className="w-full md:max-w-40">Back</Button>
-            <Button className="w-full md:max-w-40">Next</Button>
-        </div>
+            {onBack && (
+              <Button variant="outline" className="w-full md:max-w-40" onClick={onBack} type="button">
+                Back
+              </Button>
+            )}
+            <Button 
+              className="w-full md:max-w-40 ml-auto" 
+              onClick={async () => {
+                const isValid = await (window as any).__bankingDetailsValidate?.();
+                if (isValid && onNext) {
+                  const data = localStorage.getItem("companyBankingDetailsFormData");
+                  if (data) await onNext(JSON.parse(data));
+                }
+              }}
+              type="button"
+            >
+              Next
+            </Button>
+          </div>
       </div>
     </div>
   );

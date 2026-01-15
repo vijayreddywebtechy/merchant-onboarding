@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 // @ts-ignore: side-effect import of global CSS without type declarations
 import "./globals.css";
 import { bentonSansPro } from "./fonts";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 export const metadata: Metadata = {
   title: "Merchant Onboarding",
@@ -16,7 +17,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={bentonSansPro.variable}>
       <body className={`${bentonSansPro.className} antialiased`}>
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

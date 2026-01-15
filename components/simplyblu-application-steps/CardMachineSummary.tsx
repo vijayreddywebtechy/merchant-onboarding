@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import Image from "next/image";
 import merchantApp from "@/assets/images/general/mobile_app_device.png";
 import cardMachineMd from "@/assets/images/general/card_machine_md.png";
@@ -13,9 +15,68 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
+import { cardMachineSummarySchema } from "@/lib/validationSchemas";
 
-export default function CardMachineSummary() {
+type CardMachineSummaryData = {
+  cardMachineQuantity: string;
+  monthlyTransactionVolume: string;
+  acceptanceFee: string;
+  agreementAccepted: boolean;
+};
+
+interface Props {
+  onNext?: () => void;
+  onBack?: () => void;
+}
+
+export default function CardMachineSummary({ onNext, onBack }: Props) {
   const [open, setOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const {
+    control,
+    formState: { errors, isValidating },
+    handleSubmit,
+    watch,
+    reset,
+  } = useForm<CardMachineSummaryData>({
+    resolver: yupResolver(cardMachineSummarySchema) as any,
+    mode: "onChange",
+    defaultValues: {
+      cardMachineQuantity: "1",
+      monthlyTransactionVolume: "",
+      acceptanceFee: "",
+      agreementAccepted: false,
+    },
+  });
+
+  useEffect(() => {
+    const data = localStorage.getItem("cardMachineSummaryFormData");
+    if (data) {
+      reset(JSON.parse(data));
+    }
+  }, [reset]);
+
+  // Save form data in real-time to localStorage
+  useEffect(() => {
+    const subscription = watch((data) => {
+      localStorage.setItem("cardMachineSummaryFormData", JSON.stringify(data));
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
+
+  // Expose validation through window object for Stepper to call
+  useEffect(() => {
+    (window as any).__cardMachineSummaryValidate = async () => {
+      const isValid = await new Promise<boolean>((resolve) => {
+        handleSubmit(
+          () => resolve(true),
+          () => resolve(false)
+        )();
+      });
+      return isValid;
+    };
+  }, [handleSubmit]);
 
   return (
     <div>
@@ -416,10 +477,14 @@ export default function CardMachineSummary() {
       </div>
 
       <div className="flex mt-10 gap-4">
-        <Button variant="outline" className="w-full md:w-1/4">
+        <Button variant="outline" className="w-full md:w-1/4" onClick={onBack} disabled={isValidating}>
           Back
         </Button>
-        <Button className="w-full md:w-1/4" onClick={() => setOpen(true)}>
+        <Button 
+          className="w-full md:w-1/4" 
+          onClick={() => setOpen(true)}
+          disabled={isValidating}
+        >
           Confirm
         </Button>
       </div>
@@ -510,13 +575,29 @@ export default function CardMachineSummary() {
 
           {/* Footer with Action Button */}
           <div className="border-t bg-gray-50 px-6 py-4">
-            <div className="max-w-3xl mx-auto flex justify-center">
+            <div className="max-w-3xl mx-auto flex justify-center gap-4">
+              <Button
+                variant="outline"
+                className="w-full md:w-1/3"
+                size="md"
+                onClick={() => setOpen(false)}
+              >
+                CANCEL
+              </Button>
               <Button
                 variant="default"
                 className="w-full md:w-1/3"
                 size="md"
+                onClick={async () => {
+                  const isValid = await (window as any).__cardMachineSummaryValidate?.();
+                  if (isValid) {
+                    setOpen(false);
+                    if (onNext) onNext();
+                  }
+                }}
+                disabled={isValidating}
               >
-                SIGN
+                {isValidating ? "SIGNING..." : "SIGN"}
               </Button>
             </div>
           </div>

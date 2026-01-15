@@ -2,7 +2,17 @@ import Image from "next/image";
 import success from "@/assets/images/icons/success.png";
 import { Button } from "@/components/ui/button";
 
-const VerificationStatus = () => {
+type Props = {
+  onNext?: () => void;
+};
+
+const VerificationStatus = (props: Props) => {
+  const handleNext = () => {
+    if (props.onNext) {
+      props.onNext();
+    }
+  };
+
   return (
     <div className="w-full max-w-[976px] mx-auto">
       <div className="flex flex-col place-items-center py-10">
@@ -22,11 +32,9 @@ const VerificationStatus = () => {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <Button variant="outline" className="w-60">
-            Back
-          </Button>
-          <Button variant="default" className="w-60 ">
-            Scan
+         
+          <Button variant="default" className="w-60" onClick={handleNext}>
+            Next
           </Button>
         </div>
       </div>
