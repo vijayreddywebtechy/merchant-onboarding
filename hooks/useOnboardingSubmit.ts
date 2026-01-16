@@ -79,6 +79,50 @@ export const useOnboardingSubmit = () => {
     const productNumber = searchParams.get("prodId") || "ZPOS";
     const pricingOption = searchParams.get("prOpt") || "ZSIB";
 
+    // Get additional data from localStorage
+    const storedData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+    const companyInfo = storedData.companyInfo?.COMPANY_DATA;
+    const companyDirectors = storedData.companyDirectors?.COMPANY_DATA?.Directors || [];
+    const selectedCompany = storedData.selectedCompany;
+    const isSoleProprietor = storedData.isSoleProprietor === true;
+
+    // Province mapping to match API requirements
+    const provinceMap: Record<string, string> = {
+      "eastern-cape": "EC",
+      "free-state": "FS",
+      "gauteng": "GP",
+      "kwazulu-natal": "KZN",
+      "limpopo": "LP",
+      "mpumalanga": "MP",
+      "northern-cape": "NC",
+      "north-west": "NW",
+      "western-cape": "WC"
+    };
+
+    const provinceCode = provinceMap[formData.province.toLowerCase()] || formData.province.toUpperCase();
+
+    // Get main director - try to find by ID first, otherwise use first director
+    const mainDirector = companyDirectors.find((dir: any) => dir.ID_NO === formData.directorId) 
+      || companyDirectors[0] 
+      || {};
+
+    // Determine business type and details - use isSoleProprietor flag first
+    const businessType = isSoleProprietor 
+      ? "SOLE PROPRIETOR" 
+      : (companyInfo?.Registration?.ENT_TYPE || "SOLE PROPRIETOR");
+    
+    const businessName = isSoleProprietor 
+      ? formData.directorId 
+      : (companyInfo?.Registration?.ENT_NAME || selectedCompany?.name || formData.directorId);
+    const businessRegNumber = isSoleProprietor 
+      ? formData.directorId 
+      : (companyInfo?.Registration?.ENT_NUMBER || selectedCompany?.registrationNumber || formData.directorId);
+
+    // Extract first name and last name
+    // For sole proprietor without company data, we need to extract from ID or use placeholder
+    const firstName = mainDirector.FIRST_NAMES || formData.directorId.substring(0, 5);
+    const lastName = mainDirector.SURNAME || formData.directorId;
+    
     const payload = {
       productDetails: {
         productNumber: productNumber,
@@ -93,19 +137,19 @@ export const useOnboardingSubmit = () => {
           pipDetails: {
             publicOfficialRelatedDetails: {
               typeOfRelationship: null,
-              surname: formData.directorId,
+              surname: lastName,
               relatedToPublicOfficial: null,
-              name: "Director",
+              name: firstName,
             },
             publicOfficial: false,
           },
           mainApplicant: true,
           loggedInUser: true,
-          lastName: null,
+          lastName: lastName,
           identificationType: "SAID",
           identificationNumber: formData.directorId,
           identificationCountryCode: "ZA",
-          firstName: null,
+          firstName: firstName,
           emailAddress: formData.email,
           digitalId: null,
           cellphoneNumber: formData.cellphone,
@@ -120,28 +164,30 @@ export const useOnboardingSubmit = () => {
           collectShare: true,
         },
         marketingConsents: {
-          shareCustomerData: false,
-          receiveMarketing: false,
-          marketResearch: false,
-          externalMarketing: false,
+          shareCustomerData: true,
+          receiveMarketing: true,
+          marketResearch: true,
+          externalMarketing: true,
         },
       },
       businessDetails: {
-        soleShareholdingInd: true,
+        soleShareholdingInd: isSoleProprietor,
         createLead: false,
-        businessType: "SOLE PROPRIETOR",
+        businessType: businessType,
         businessTurnover: formData.grossTurnover,
-        businessRegistrationNumber: formData.directorId,
-        businessProvince: formData.province.toUpperCase(),
-        businessName: "Business",
-        businessCity: "City",
+        businessRegistrationNumber: businessRegNumber,
+        businessProvince: provinceCode,
+        businessName: businessName,
+        businessCity: null,
       },
       applicationDetails: {
-        inflightCustomerDataId: "",
+        inflightCustomerDataId: "MyMo Biz Account",
         bpGuid: null,
         applicationId: "a6h9M0000007909QAA",
       },
     };
+
+    console.log("Pre-application payload:", JSON.stringify(payload, null, 2));
 
     try {
       await preApplicationSubmit.mutate(
@@ -171,7 +217,15 @@ export const useOnboardingSubmit = () => {
             } else if ([
               "52100", "52101", "52107", "52108",
             ].includes(status)) {
-              setError("Technical difficulties. Please try again.");
+              // Technical error - for now, continue to customer onboarding to fill application
+              console.warn(`Pre-application returned status ${status}: ${data?.responseStatusDesc}`);
+              setIsLoading(false);
+              setError(`Technical error (${status}): ${data?.responseStatusDesc || 'CreateDigitalOfferException'}. Continuing to application form...`);
+              
+              // Navigate to customer onboarding to continue the application
+              setTimeout(() => {
+                router.push("/account-onboarding/customer-onboarding");
+              }, 2000);
             } else if (status === "52000") {
               // Pre-application successful, open PING authorization for login
               setIsLoading(false);
@@ -201,8 +255,64 @@ export const useOnboardingSubmit = () => {
     }
   };
 
+  const submitPreApplicationOnly = async () => {
+    console.log("Starting pre-application submission after OTP verification");
+
+    setIsLoading(true);
+    setError(null);
+
+    // Get business details from localStorage
+    const storedData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+    const businessDetails = storedData.businessDetails;
+
+    if (!businessDetails) {
+      setError("Business details not found. Please start from the beginning.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Step 1: Get access token
+    try {
+      await new Promise<void>((resolve, reject) => {
+        accessTokenMutation.mutate(undefined, {
+          onSuccess: async (tokenData) => {
+            console.log("✅ Access token generated successfully for pre-application");
+
+            if (tokenData?.access_token) {
+              // Save token for later use
+              if (tokenData?.expires_in) {
+                const tokenInfo = {
+                  access_token: tokenData.access_token,
+                  expires_in: tokenData.expires_in,
+                  timestamp: Date.now(),
+                };
+                sessionStorage.setItem("ping_access_token_data", JSON.stringify(tokenInfo));
+              }
+
+              // Step 2: Submit pre-application with token
+              await submitPreApplication(businessDetails, tokenData.access_token);
+              resolve();
+            }
+          },
+          onError: (err) => {
+            setIsLoading(false);
+            const errorMessage = err?.message || "Failed to generate access token. Please check your configuration.";
+            setError(errorMessage);
+            console.error("Token generation error:", err);
+            reject(err);
+          },
+        });
+      });
+    } catch (err) {
+      setIsLoading(false);
+      setError("Failed to process request. Please try again.");
+      console.error("Error:", err);
+    }
+  };
+
   return {
     handleFormSubmit,
+    submitPreApplicationOnly,
     isLoading,
     error,
   };

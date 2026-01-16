@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { bentonSansPro } from "./fonts";
 import { QueryProvider } from "@/providers/QueryProvider";
+import TokenRefreshProvider from "@/components/TokenRefreshProvider";
 
 export const metadata: Metadata = {
   title: "Merchant Onboarding",
@@ -18,7 +19,9 @@ export default function RootLayout({
     <html lang="en" className={bentonSansPro.variable}>
       <body className={`${bentonSansPro.className} antialiased`}>
         <QueryProvider>
-          {children}
+          <TokenRefreshProvider>
+            {children}
+          </TokenRefreshProvider>
         </QueryProvider>
       </body>
     </html>

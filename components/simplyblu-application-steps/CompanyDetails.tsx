@@ -111,29 +111,39 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
     if (data) {
       reset(JSON.parse(data));
     } else {
-      // If no saved data, try to prefill from merchantonboardingdata
-      const merchantData = localStorage.getItem("merchantonboardingdata");
+      // If no saved data, try to prefill from merchantOnboardingData
+      const merchantData = localStorage.getItem("merchantOnboardingData");
       if (merchantData) {
         const parsed = JSON.parse(merchantData);
-        if (parsed.businessDetails) {
-          reset({
-            registeredCompanyName: "",
-            countryOfRegistration: "South Africa",
-            addressType: "different",
-            addressSearch: "",
-            streetNumber: "",
-            suburb: "",
-            complexName: "",
-            province: parsed.businessDetails.province || "",
-            cityTown: "",
-            postalCode: "",
-            natureOfBusiness: "",
-            industryClassification: "",
-            preferredBranch: "",
-            ownership: "",
-            hasValidBBBEE: "",
-          });
-        }
+        const businessDetails = parsed.businessDetails;
+        const companyInfo = parsed.companyInfo?.COMPANY_DATA?.Registration;
+        const selectedCompany = parsed.selectedCompany;
+        const isSoleProprietor = parsed.isSoleProprietor;
+        
+        // Determine company name and address based on type
+        const companyName = isSoleProprietor 
+          ? businessDetails?.directorId || ""
+          : (companyInfo?.ENT_NAME || selectedCompany?.name || "");
+        
+        const address = companyInfo || {};
+        
+        reset({
+          registeredCompanyName: companyName,
+          countryOfRegistration: "South Africa",
+          addressType: "different",
+          addressSearch: "",
+          streetNumber: address.PHYS_ADDR_1 || "",
+          suburb: address.PHYS_ADDR_2 || "",
+          complexName: "",
+          province: businessDetails?.province || address.REGION_CODE?.toLowerCase() || "",
+          cityTown: address.PHYS_ADDR_2 || "",
+          postalCode: address.PHYS_CODE || "",
+          natureOfBusiness: address.SICC_DESCRIPTION || "",
+          industryClassification: "",
+          preferredBranch: "",
+          ownership: isSoleProprietor ? "sole-proprietor" : "company",
+          hasValidBBBEE: "",
+        });
       }
     }
 
@@ -224,17 +234,8 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
     const preApplicationResponse = JSON.parse(
       localStorage.getItem("preApplicationResponse") || "{}"
     );
-    const inflightCustomerDataID = preApplicationResponse.inflightCustomerDataId;
-    const customerUUID = preApplicationResponse.initiators?.[0]?.initiatorBPGUID;
-
-    if (!inflightCustomerDataID || !customerUUID) {
-      console.warn("Missing preApplicationResponse data, proceeding without API call");
-      setIsSubmitting(false);
-      if (onNext) {
-        await onNext(finalData as CompanyDetailsData);
-      }
-      return;
-    }
+    const inflightCustomerDataID = preApplicationResponse.inflightCustomerDataId || "MyMo Biz Account";
+    const customerUUID = preApplicationResponse.initiators?.[0]?.initiatorBPGUID || "temp-uuid";
 
     // Transform form data to API payload
     const payload = transformCompanyDetailsToAPI(
@@ -247,6 +248,15 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
 
     // Store the payload for later use in MarketingConsent
     localStorage.setItem("companyDetailsPayload", JSON.stringify(payload));
+
+    if (!preApplicationResponse.inflightCustomerDataId || !preApplicationResponse.initiators?.[0]?.initiatorBPGUID) {
+      console.warn("Pre-application data incomplete, skipping company details API call");
+      setIsSubmitting(false);
+      if (onNext) {
+        await onNext(finalData as CompanyDetailsData);
+      }
+      return;
+    }
 
     // Make API call
     updateCompanyDetails(

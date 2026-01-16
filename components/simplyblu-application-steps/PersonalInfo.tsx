@@ -170,28 +170,40 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
     if (savedPersonalData) {
       reset(JSON.parse(savedPersonalData));
     } else {
-      // If no saved data, try to prefill from merchantonboardingdata
+      // If no saved data, try to prefill from merchantOnboardingData
       const merchantData = localStorage.getItem("merchantOnboardingData");
       if (merchantData) {
         const parsed = JSON.parse(merchantData);
-        if (parsed.businessDetails) {
+        const businessDetails = parsed.businessDetails;
+        const companyDirectors = parsed.companyDirectors?.COMPANY_DATA?.Directors || [];
+        const companyInfo = parsed.companyInfo?.COMPANY_DATA?.Registration;
+        
+        // Find the director matching the director ID
+        const director = companyDirectors.find((dir: any) => 
+          dir.ID_NO === businessDetails?.directorId
+        );
+        
+        // Get address from company or director
+        const address = companyInfo || director || {};
+        
+        if (businessDetails) {
           reset({
-            fname: "",
-            lname: "",
-            idNo: parsed.businessDetails.directorId || "",
-            phoneNumber: parsed.businessDetails.cellphone || "",
-            email: parsed.businessDetails.email || "",
+            fname: director?.FIRST_NAMES || "",
+            lname: director?.SURNAME || "",
+            idNo: businessDetails.directorId || "",
+            phoneNumber: businessDetails.cellphone?.replace(/^0/, "") || "",
+            email: businessDetails.email || "",
             nationality: "ZA",
             citizenship: "ZA",
             isPublicOfficial: "",
             isSouthAfricaResident: "",
-            street: "",
+            street: address.PHYS_ADDR_1 || address.RES_ADDR_1 || "",
             unit: "",
             buildingName: "",
-            suburb: "",
-            city: "",
-            province: parsed.businessDetails.province || "",
-            postalCode: "",
+            suburb: address.PHYS_ADDR_2 || address.RES_ADDR_2 || "",
+            city: address.PHYS_ADDR_2 || address.RES_ADDR_2 || "",
+            province: businessDetails.province || address.REGION_CODE?.toLowerCase() || "",
+            postalCode: address.PHYS_CODE || address.RES_POST_CODE || "",
             addressSearch: "",
           });
         }

@@ -30,7 +30,7 @@ function CompanyInfo({ onNext, onBack }: CompanyInfoProps) {
   // Notify parent when substep changes
   React.useEffect(() => {
     const event = new CustomEvent('companyInfoSubStepChange', { 
-      detail: { isLastSubStep: currentSubStep === 6 } 
+      detail: { isLastSubStep: currentSubStep === COMPANY_STEPS.length - 1 } 
     });
     window.dispatchEvent(event);
   }, [currentSubStep]);

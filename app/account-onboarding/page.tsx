@@ -1,19 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import BusinessDetailsForm from "@/components/onboarding/BusinessDetailsForm";
 import TellusMore from "@/components/onboarding/TellusMore";
 import VerifyBlock from "@/components/VerifyIdentity/VerifyBlock";
 import { useOnboardingSubmit } from "@/hooks/useOnboardingSubmit";
+import { useAccessToken } from "@/hooks/useAccessToken";
 
 type Props = {};
 
 const Page = (props: Props) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const searchParams = useSearchParams();
-  const { handleFormSubmit, isLoading, error } = useOnboardingSubmit();
+  const router = useRouter();
+  const { handleFormSubmit, error } = useOnboardingSubmit();
+  const accessTokenMutation = useAccessToken();
 
   useEffect(() => {
     const prodId = searchParams.get("prodId");
@@ -36,8 +40,85 @@ const Page = (props: Props) => {
   };
 
   const handleBusinessDetailsNext = async (formData: any) => {
-    // Just navigate to verification step, don't submit yet
-    setCurrentStep(2);
+    setIsLoading(true);
+    setLocalError(null);
+
+    try {
+      // Get access token from sessionStorage or generate new one
+      let accessToken = null;
+      const storedToken = sessionStorage.getItem("ping_access_token_data");
+      
+      if (storedToken) {
+        const tokenData = JSON.parse(storedToken);
+        const tokenAge = Date.now() - (tokenData.timestamp || 0);
+        const expiresIn = (tokenData.expires_in || 3600) * 1000; // Convert to milliseconds
+        
+        // Check if token is still valid (with 5 minute buffer)
+        if (tokenAge < expiresIn - 300000) {
+          accessToken = tokenData.access_token;
+        }
+      }
+
+      // If no valid token, generate a new one
+      if (!accessToken) {
+        await new Promise<void>((resolve, reject) => {
+          accessTokenMutation.mutate(undefined, {
+            onSuccess: (tokenData) => {
+              console.log("✅ Access token generated successfully");
+              if (tokenData?.access_token) {
+                accessToken = tokenData.access_token;
+                
+                // Save token for later use
+                if (tokenData?.expires_in) {
+                  const tokenInfo = {
+                    access_token: tokenData.access_token,
+                    expires_in: tokenData.expires_in,
+                    timestamp: Date.now(),
+                  };
+                  sessionStorage.setItem("ping_access_token_data", JSON.stringify(tokenInfo));
+                }
+                resolve();
+              }
+            },
+            onError: (err) => {
+              const errorMessage = err?.message || "Failed to generate access token. Please check your configuration.";
+              setLocalError(errorMessage);
+              console.error("Token generation error:", err);
+              reject(err);
+            },
+          });
+        });
+      }
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+      }
+
+      // Call customers API to get list of companies
+      const response = await fetch(`/api/get-customers?nidNumber=${formData.directorId}`, { headers });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch customer data");
+      }
+
+      // Store customer data
+      const storedData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+      storedData.customersData = data;
+      localStorage.setItem("merchantOnboardingData", JSON.stringify(storedData));
+
+      // Navigate to your-companies page
+      router.push("/account-onboarding/your-companies");
+    } catch (err: any) {
+      console.error("Error fetching customers:", err);
+      setLocalError(err.message || "Failed to fetch customer data. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleVerificationNext = async () => {

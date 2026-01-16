@@ -72,6 +72,15 @@ const MarketingConsentForm = ({ onNext, onBack }: Props) => {
           const preApplicationResponse = JSON.parse(localStorage.getItem("preApplicationResponse") || "{}");
           const customerUUID = preApplicationResponse.businessBPGUID;
           
+          if (!customerUUID) {
+            console.warn("No customer UUID found, skipping related parties fetch");
+            setIsLoading(false);
+            if (onNext) {
+              onNext();
+            }
+            return;
+          }
+          
           const response = await axios.get(
             `/api/related-parties?customerUUID=${customerUUID}`,
             {
@@ -89,6 +98,10 @@ const MarketingConsentForm = ({ onNext, onBack }: Props) => {
         } catch (error) {
           console.error("Error fetching related parties:", error);
           setIsLoading(false);
+          // Continue to next step even if this fails
+          if (onNext) {
+            onNext();
+          }
         }
       } else if (apiStep === 2) {
         // Step 3: Update Related Parties
@@ -165,8 +178,9 @@ const MarketingConsentForm = ({ onNext, onBack }: Props) => {
     const savedPayload = localStorage.getItem("companyDetailsPayload");
     
     if (!savedPayload) {
-      console.error("No company details payload found. Proceeding without API call.");
+      console.warn("No company details payload found. Skipping company details update API call.");
       setIsLoading(false);
+      // Continue to next step without API call
       if (onNext) {
         onNext();
       }

@@ -49,6 +49,32 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
     const data = localStorage.getItem("companyFinancialInfoFormData");
     if (data) {
       reset(JSON.parse(data));
+    } else {
+      // Try to prefill from merchantOnboardingData
+      const merchantData = localStorage.getItem("merchantOnboardingData");
+      if (merchantData) {
+        const parsed = JSON.parse(merchantData);
+        const turnover = parsed.businessDetails?.grossTurnover;
+        
+        // Map turnover to range if possible
+        let turnoverRange = "";
+        if (turnover) {
+          const amount = parseInt(turnover);
+          if (amount < 50000) turnoverRange = "0-50000";
+          else if (amount < 100000) turnoverRange = "50000-100000";
+          else if (amount < 500000) turnoverRange = "100000-500000";
+          else if (amount < 1000000) turnoverRange = "500000-1000000";
+          else turnoverRange = "1000000+";
+        }
+        
+        reset({
+          annualTurnover: turnoverRange,
+          monthlyProfit: "",
+          averageTransactionAmount: "",
+          irregularIncome: "",
+          fundingSource: [],
+        });
+      }
     }
   }, [reset]);
 
