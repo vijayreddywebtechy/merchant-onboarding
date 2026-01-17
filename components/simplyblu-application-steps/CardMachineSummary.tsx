@@ -326,7 +326,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
     try {
       // Get all required data from localStorage
       const preApplicationResponse = JSON.parse(
-        localStorage.getItem("preApplicationResponse") || "{}"
+        localStorage.getItem("merchantOnboardingData") || "{}"
       );
       const productSetupData = localStorage.getItem("productSetupData");
       const companyDetailsData = localStorage.getItem("companyDetailsFormData");
@@ -334,7 +334,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
       const bankingDetailsData = localStorage.getItem("companyBankingDetailsFormData");
       const personalDetailsData = localStorage.getItem("personalDetailsFormData");
       
-      const offerId = preApplicationResponse.digitalOfferId;
+      const offerId = preApplicationResponse.preApplicationResponse.digitalOfferId;
 
       if (!offerId) {
         console.error("No offer ID found");
@@ -380,6 +380,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
       
       // Build pricing conditions - empty array for now as per working payload
       const pricCond: any[] = [];
+      setOpen(true);
 
       // Build device entry
       const deviceEntry: any = {

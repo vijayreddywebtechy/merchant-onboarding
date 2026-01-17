@@ -17,6 +17,7 @@ import {
   cityOptions,
   businessNatureOptions,
   businessIndustryOptions,
+  orgOwnspTypeOptions
 } from "@/lib/data";
 
 type CompanyDetailsData = {
@@ -655,14 +656,14 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
                 render={({ field }) => (
                   <CustomSelect
                     value={(() => {
-                      const found = ownershipOptions.find(opt => opt.value === field.value);
+                      const found = orgOwnspTypeOptions.find(opt => opt.value === field.value);
                       return found ? found : null;
                     })()}
                     onChange={(option) => {
                       const selected = Array.isArray(option) ? option[0] : option;
                       field.onChange(selected ? selected.value : "");
                     }}
-                    options={ownershipOptions}
+                    options={orgOwnspTypeOptions}
                     placeholder="Owner"
                   />
                 )}
