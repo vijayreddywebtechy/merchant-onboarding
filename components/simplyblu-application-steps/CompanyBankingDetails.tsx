@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bankingDetailsSchema } from "@/lib/validationSchemas";
-import { merchantCommissionRates } from "@/lib/data";
+import { merchantCommissionRates, bankNamesOptions, getBranchesForBank } from "@/lib/data";
 
 type BankingDetailsData = {
   estimatedTurnover: string;
@@ -25,23 +25,6 @@ interface CompanyBankingDetailsProps {
   onNext?: (data: BankingDetailsData) => Promise<void>;
   onBack?: () => void;
 }
-
-// Bank name options
-const bankNameOptions = [
-  { value: "Nedbank", label: "Nedbank" },
-  { value: "Standard Bank", label: "Standard Bank" },
-  { value: "FNB", label: "FNB" },
-  { value: "ABSA", label: "ABSA" },
-  { value: "Capitec", label: "Capitec" },
-];
-
-// Branch name options
-const branchNameOptions = [
-  { value: "Sandton", label: "Sandton" },
-  { value: "Rosebank", label: "Rosebank" },
-  { value: "Pretoria", label: "Pretoria" },
-  { value: "Cape Town", label: "Cape Town" },
-];
 
 // Account type options
 const accountTypeOptions = [
@@ -59,6 +42,7 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
     control,
     watch,
     reset,
+    setValue,
   } = useForm({
     resolver: yupResolver(bankingDetailsSchema) as any,
     mode: "onChange",
@@ -102,6 +86,19 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
   }, [handleSubmit]);
 
   const estimatedTurnoverValue = watch("estimatedTurnover");
+  const selectedBankName = watch("bankName");
+
+  // Get branches for selected bank
+  const availableBranches = useMemo(() => {
+    if (!selectedBankName) return [];
+    return getBranchesForBank(selectedBankName);
+  }, [selectedBankName]);
+
+  // Reset branch when bank changes
+  useEffect(() => {
+    setValue("branchName", "");
+    setValue("branchCode", "");
+  }, [selectedBankName, setValue]);
 
   const commissionRates = useMemo(() => {
     const isHighTurnover = Number(estimatedTurnoverValue) > 200_000;
@@ -154,7 +151,7 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                 render={({ field }) => (
                   <CustomSelect
                     value={(() => {
-                      const found = bankNameOptions.find(
+                      const found = bankNamesOptions.find(
                         (opt) => opt.value === field.value
                       );
                       return found ? found : null;
@@ -163,7 +160,7 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                       const selected = Array.isArray(option) ? option[0] : option;
                       field.onChange(selected ? selected.value : "");
                     }}
-                    options={bankNameOptions}
+                    options={bankNamesOptions}
                     placeholder="Please select"
                   />
                 )}
@@ -238,22 +235,27 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                 render={({ field }) => (
                   <CustomSelect
                     value={(() => {
-                      const found = branchNameOptions.find(
+                      const found = availableBranches.find(
                         (opt) => opt.value === field.value
                       );
                       return found ? found : null;
                     })()}
                     onChange={(option) => {
                       const selected = Array.isArray(option) ? option[0] : option;
-                      field.onChange(selected ? selected.value : "");
+                      field.onChange(selected ? selected.label : "");
+                      // Also set the branch code
+                      setValue("branchCode", selected ? selected.value : "");
                     }}
-                    options={branchNameOptions}
-                    placeholder="Please select"
+                    options={availableBranches}
+                    placeholder={selectedBankName ? "Please select" : "Select a bank first"}
                   />
                 )}
               />
               {errors.branchName && (
                 <p className="text-red-500 text-sm">{errors.branchName.message as string}</p>
+              )}
+              {!selectedBankName && (
+                <p className="text-gray-500 text-sm">Please select a bank first</p>
               )}
             </div>
 

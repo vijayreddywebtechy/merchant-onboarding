@@ -274,56 +274,109 @@ export const businessNatureOptions: SelectOption[] = [
 
 
 
-/** Sheet: Branch  and bank names */
-export const branchAndBankNamesOptions: SelectOption[] = [
-  { label: "NEDBANK LIMITED", value: "198765" },
-  { label: "CITIBANK N.A. SOUTH AFRICA", value: "350005" },
-  { label: "STANDARD BANK", value: "51001" },
-  { label: "HBZ BANK", value: "570137" },
-  { label: "FIRST NATIONAL BANK", value: "250655" },
-  { label: "OM BANK LIMITED", value: "352000" },
-  { label: "ACCESS BANK", value: "410105" },
-  { label: "AFRICAN BANK", value: "430000" },
-  { label: "HBZ BANK", value: "570145" },
-  { label: "AFRICAN BANK INCORP. UBANK", value: "431010" },
-  { label: "JP MORGAN CHASE BANK", value: "432000" },
-  { label: "CAPITEC BUSINESS", value: "450105" },
-  { label: "SOUTH AFRICAN POST OFFICE", value: "460005" },
-  { label: "HBZ BANK", value: "570326" },
-  { label: "BIDVEST BANK", value: "462005" },
-  { label: "CAPITEC BANK LIMITED", value: "470010" },
-  { label: "HBZ BANK", value: "570100" },
-  { label: "HBZ BANK", value: "570105" },
-  { label: "HBZ BANK", value: "570112" },
-  { label: "HBZ BANK", value: "570126" },
-  { label: "HBZ BANK", value: "570226" },
-  { label: "INVESTEC BANK LIMITED", value: "580105" },
-  { label: "AFRICAN BANK BUSINESS", value: "584000" },
-  { label: "OLYMPUS MOBILE", value: "585001" },
-  { label: "HSBC BANK PLC - JOHANNESBURG", value: "587000" },
-  { label: "VBS MUTUAL BANK", value: "588000" },
-  { label: "FINBOND MUTUAL BANK", value: "589000" },
-  { label: "ABSA BANK", value: "632005" },
-  { label: "MEEG BANK", value: "634221" },
-  { label: "MEEG BANK", value: "634321" },
-  { label: "UNIBANK LIMITED", value: "790005" },
-  { label: "MEEG BANK", value: "634421" },
-  { label: "MEEG BANK", value: "634422" },
-  { label: "MEEG BANK", value: "634519" },
-  { label: "MEEG BANK", value: "634621" },
-  { label: "MEEG BANK", value: "634721" },
-  { label: "TYME BANK", value: "678910" },
-  { label: "DISCOVERY BANK", value: "679000" },
-  { label: "SASFIN BANK", value: "683000" },
-  { label: "SASFIN BANK", value: "683001" },
-  { label: "STANDARD CHARTERED BANK", value: "730020" },
-  { label: "ALBARAKA BANK", value: "800000" },
-  { label: "STATE BANK OF INDIA", value: "801000" },
-  { label: "BANK ZERO", value: "888000" },
-  { label: "RESERVE BANK", value: "900105" },
-  { label: "RESERVE BANK", value: "900145" },
-  { label: "RESERVE BANK", value: "910145" },
+/** Sheet: Branch and bank names */
+
+// Unique bank names for bank selection dropdown
+export const bankNamesOptions: SelectOption[] = [
+  { label: "ABSA BANK", value: "ABSA BANK" },
+  { label: "ACCESS BANK", value: "ACCESS BANK" },
+  { label: "AFRICAN BANK", value: "AFRICAN BANK" },
+  { label: "AFRICAN BANK BUSINESS", value: "AFRICAN BANK BUSINESS" },
+  { label: "AFRICAN BANK INCORP. UBANK", value: "AFRICAN BANK INCORP. UBANK" },
+  { label: "ALBARAKA BANK", value: "ALBARAKA BANK" },
+  { label: "BANK ZERO", value: "BANK ZERO" },
+  { label: "BIDVEST BANK", value: "BIDVEST BANK" },
+  { label: "CAPITEC BANK LIMITED", value: "CAPITEC BANK LIMITED" },
+  { label: "CAPITEC BUSINESS", value: "CAPITEC BUSINESS" },
+  { label: "CITIBANK N.A. SOUTH AFRICA", value: "CITIBANK N.A. SOUTH AFRICA" },
+  { label: "DISCOVERY BANK", value: "DISCOVERY BANK" },
+  { label: "FINBOND MUTUAL BANK", value: "FINBOND MUTUAL BANK" },
+  { label: "FIRST NATIONAL BANK", value: "FIRST NATIONAL BANK" },
+  { label: "HBZ BANK", value: "HBZ BANK" },
+  { label: "HSBC BANK PLC - JOHANNESBURG", value: "HSBC BANK PLC - JOHANNESBURG" },
+  { label: "INVESTEC BANK LIMITED", value: "INVESTEC BANK LIMITED" },
+  { label: "JP MORGAN CHASE BANK", value: "JP MORGAN CHASE BANK" },
+  { label: "MEEG BANK", value: "MEEG BANK" },
+  { label: "NEDBANK LIMITED", value: "NEDBANK LIMITED" },
+  { label: "OLYMPUS MOBILE", value: "OLYMPUS MOBILE" },
+  { label: "OM BANK LIMITED", value: "OM BANK LIMITED" },
+  { label: "RESERVE BANK", value: "RESERVE BANK" },
+  { label: "SASFIN BANK", value: "SASFIN BANK" },
+  { label: "SOUTH AFRICAN POST OFFICE", value: "SOUTH AFRICAN POST OFFICE" },
+  { label: "STANDARD BANK", value: "STANDARD BANK" },
+  { label: "STANDARD CHARTERED BANK", value: "STANDARD CHARTERED BANK" },
+  { label: "STATE BANK OF INDIA", value: "STATE BANK OF INDIA" },
+  { label: "TYME BANK", value: "TYME BANK" },
+  { label: "UNIBANK LIMITED", value: "UNIBANK LIMITED" },
+  { label: "VBS MUTUAL BANK", value: "VBS MUTUAL BANK" },
 ];
+
+// Branch details with bank association
+export interface BranchDetail {
+  bankName: string;
+  branchCode: string;
+  branchName: string;
+}
+
+export const branchDetailsOptions: BranchDetail[] = [
+  { bankName: "NEDBANK LIMITED", branchCode: "198765", branchName: "ALL BRANCHES" },
+  { bankName: "CITIBANK N.A. SOUTH AFRICA", branchCode: "350005", branchName: "CITIBANK NA SOUTH AFRICA" },
+  { bankName: "STANDARD BANK", branchCode: "51001", branchName: "ALL BRANCHES" },
+  { bankName: "HBZ BANK", branchCode: "570137", branchName: "LENASIA" },
+  { bankName: "FIRST NATIONAL BANK", branchCode: "250655", branchName: "ALL BRANCHES" },
+  { bankName: "OM BANK LIMITED", branchCode: "352000", branchName: "ALL BRANCHES" },
+  { bankName: "ACCESS BANK", branchCode: "410105", branchName: "ALL BRANCHES" },
+  { bankName: "AFRICAN BANK", branchCode: "430000", branchName: "ALL BRANCHES" },
+  { bankName: "HBZ BANK", branchCode: "570145", branchName: "LAUDIUM,PRETORIA" },
+  { bankName: "AFRICAN BANK INCORP. UBANK", branchCode: "431010", branchName: "AFRICAN BANK INCORP. UBANK" },
+  { bankName: "JP MORGAN CHASE BANK", branchCode: "432000", branchName: "ALL BRANCHES" },
+  { bankName: "CAPITEC BUSINESS", branchCode: "450105", branchName: "ALL BRANCHES" },
+  { bankName: "SOUTH AFRICAN POST OFFICE", branchCode: "460005", branchName: "ALL BRANCHES" },
+  { bankName: "HBZ BANK", branchCode: "570326", branchName: "PIETERMARITZBURG" },
+  { bankName: "BIDVEST BANK", branchCode: "462005", branchName: "ALL BRANCHES" },
+  { bankName: "CAPITEC BANK LIMITED", branchCode: "470010", branchName: "ALL BRANCHES" },
+  { bankName: "HBZ BANK", branchCode: "570100", branchName: "BOKSBURG" },
+  { bankName: "HBZ BANK", branchCode: "570105", branchName: "FORDSBURG" },
+  { bankName: "HBZ BANK", branchCode: "570112", branchName: "ROSEBANK" },
+  { bankName: "HBZ BANK", branchCode: "570126", branchName: "UMHLANGA ARCH BRANCH" },
+  { bankName: "HBZ BANK", branchCode: "570226", branchName: "OVERPORT IBB" },
+  { bankName: "INVESTEC BANK LIMITED", branchCode: "580105", branchName: "ALL BRANCHES" },
+  { bankName: "AFRICAN BANK BUSINESS", branchCode: "584000", branchName: "ALL BRANCHES" },
+  { bankName: "OLYMPUS MOBILE", branchCode: "585001", branchName: "ALL BRANCHES" },
+  { bankName: "HSBC BANK PLC - JOHANNESBURG", branchCode: "587000", branchName: "ALL BRANCHES" },
+  { bankName: "VBS MUTUAL BANK", branchCode: "588000", branchName: "ALL BRANCHES" },
+  { bankName: "FINBOND MUTUAL BANK", branchCode: "589000", branchName: "ALL BRANCHES" },
+  { bankName: "ABSA BANK", branchCode: "632005", branchName: "ALL BRANCHES" },
+  { bankName: "MEEG BANK", branchCode: "634221", branchName: "MEEG BANK UMTATA" },
+  { bankName: "MEEG BANK", branchCode: "634321", branchName: "MEEG BANK BUTTERWORTH" },
+  { bankName: "UNIBANK LIMITED", branchCode: "790005", branchName: "UNIBANK H/O" },
+  { bankName: "MEEG BANK", branchCode: "634421", branchName: "MEEG BANK YORK STREET" },
+  { bankName: "MEEG BANK", branchCode: "634422", branchName: "MEEG BANK LUSIKISIKI" },
+  { bankName: "MEEG BANK", branchCode: "634519", branchName: "MEEG BANK EAST LONDON" },
+  { bankName: "MEEG BANK", branchCode: "634621", branchName: "MEEG BANK CHATHAM STREET" },
+  { bankName: "MEEG BANK", branchCode: "634721", branchName: "MEEG BANK HYDE PARK" },
+  { bankName: "TYME BANK", branchCode: "678910", branchName: "TYME ROSEBANK" },
+  { bankName: "DISCOVERY BANK", branchCode: "679000", branchName: "DISCOVERY UNIVERSAL BRANCH" },
+  { bankName: "SASFIN BANK", branchCode: "683000", branchName: "ALL BRANCHES" },
+  { bankName: "SASFIN BANK", branchCode: "683001", branchName: "MOMENTUM MONEY" },
+  { bankName: "STANDARD CHARTERED BANK", branchCode: "730020", branchName: "STANDARD CHARTERED BANK JHB" },
+  { bankName: "ALBARAKA BANK", branchCode: "800000", branchName: "ALL BRANCHES" },
+  { bankName: "STATE BANK OF INDIA", branchCode: "801000", branchName: "STATE BANK OF INDIA JHB" },
+  { bankName: "BANK ZERO", branchCode: "888000", branchName: "BANK ZERO" },
+  { bankName: "RESERVE BANK", branchCode: "900105", branchName: "MONEY AND CAPITAL MARKET DEPT." },
+  { bankName: "RESERVE BANK", branchCode: "900145", branchName: "PRETORIA" },
+  { bankName: "RESERVE BANK", branchCode: "910145", branchName: "STAATSBESTEDINGS(SKATKISORDERS" },
+];
+
+// Helper function to get branches for a specific bank
+export const getBranchesForBank = (bankName: string): SelectOption[] => {
+  return branchDetailsOptions
+    .filter((branch) => branch.bankName === bankName)
+    .map((branch) => ({
+      label: branch.branchName,
+      value: branch.branchCode,
+    }));
+};
 
 /** Sheet: ORG_OWNSP_TYPE  */
 export const orgOwnspTypeOptions: SelectOption[] = [
