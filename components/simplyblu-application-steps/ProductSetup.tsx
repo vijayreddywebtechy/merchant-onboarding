@@ -1,9 +1,10 @@
-import { useState, ChangeEvent } from "react";
+import { useState, ChangeEvent, useEffect } from "react";
 import Image from "next/image";
 import CustomSelect from "@/components/dynamic/CustomSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Button } from "@/components/ui/button";
 import { Props } from "react-select";
 import cardMachine from "@/assets/images/general/card_machine.png";
 import pocketCardMachine from "@/assets/images/general/pocket_card_machine.png";
@@ -24,6 +25,12 @@ interface CardMachineSelectionData {
   pocketMachineCount: string;
   proSelected: boolean;
   pocketSelected: boolean;
+  estimatedTurnover: string;
+}
+
+interface ProductSetupProps {
+  onNext?: () => void;
+  onBack?: () => void;
 }
 
 // Number of machines options for CustomSelect
@@ -40,15 +47,48 @@ const numberOptions = [
   { value: "10", label: "10" },
 ];
 
-const ProductSetup = (props: Props) => {
-  const [formData, setFormData] = useState<CardMachineSelectionData>({
-    tradingName: "Ukim Tribe",
-    purchaseType: "rent",
-    proMachineCount: "2",
-    pocketMachineCount: "1",
-    proSelected: true,
-    pocketSelected: true,
+// Pricing configuration
+const pricingConfig = {
+  rent: {
+    proDeviceFee: 399,
+    pocketDeviceFee: 399,
+    connectivityFee: 0,
+    maxDevices: 4
+  },
+  buy: {
+    proDeviceFee: 1999,
+    pocketDeviceFee: 1999,
+    connectivityFee: 40,
+    maxDevices: 2
+  }
+};
+
+const ProductSetup = ({ onNext, onBack }: ProductSetupProps) => {
+  // Load saved data from localStorage
+  const [formData, setFormData] = useState<CardMachineSelectionData>(() => {
+    if (typeof window !== 'undefined') {
+      const savedData = localStorage.getItem("productSetupData");
+      if (savedData) {
+        return JSON.parse(savedData);
+      }
+    }
+    return {
+      tradingName: "",
+      purchaseType: "rent",
+      proMachineCount: "1",
+      pocketMachineCount: "1",
+      proSelected: false,
+      pocketSelected: false,
+      estimatedTurnover: "",
+    };
   });
+
+  // Save to localStorage whenever formData changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("productSetupData", JSON.stringify(formData));
+    }
+  }, [formData]);
 
   const handleInputChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -99,14 +139,68 @@ const ProductSetup = (props: Props) => {
     }));
   };
 
+  const getCurrentPricing = () => {
+    return formData.purchaseType ? pricingConfig[formData.purchaseType] : pricingConfig.rent;
+  };
+
   const calculateTotal = (): number => {
-    const proCount = formData.proSelected
-      ? parseInt(formData.proMachineCount) || 0
-      : 0;
-    const pocketCount = formData.pocketSelected
-      ? parseInt(formData.pocketMachineCount) || 0
-      : 0;
-    return proCount * 798 + pocketCount * 219;
+    const pricing = getCurrentPricing();
+    const proCount = formData.proSelected ? parseInt(formData.proMachineCount) || 0 : 0;
+    const pocketCount = formData.pocketSelected ? parseInt(formData.pocketMachineCount) || 0 : 0;
+    
+    const proDeviceFee = proCount * pricing.proDeviceFee;
+    const pocketDeviceFee = pocketCount * pricing.pocketDeviceFee;
+    const totalMachines = proCount + pocketCount;
+    const connectivityFee = totalMachines * pricing.connectivityFee;
+    
+    return proDeviceFee + pocketDeviceFee + connectivityFee;
+  };
+
+  const calculateDeviceFees = (): number => {
+    const pricing = getCurrentPricing();
+    const proCount = formData.proSelected ? parseInt(formData.proMachineCount) || 0 : 0;
+    const pocketCount = formData.pocketSelected ? parseInt(formData.pocketMachineCount) || 0 : 0;
+    return (proCount * pricing.proDeviceFee) + (pocketCount * pricing.pocketDeviceFee);
+  };
+
+  const calculateConnectivityFees = (): number => {
+    const pricing = getCurrentPricing();
+    const proCount = formData.proSelected ? parseInt(formData.proMachineCount) || 0 : 0;
+    const pocketCount = formData.pocketSelected ? parseInt(formData.pocketMachineCount) || 0 : 0;
+    const totalMachines = proCount + pocketCount;
+    return totalMachines * pricing.connectivityFee;
+  };
+
+  const handleSubmit = () => {
+    console.log("ProductSetup handleSubmit called");
+    console.log("Form Data:", formData);
+    
+    // Validate required fields
+    if (!formData.tradingName.trim()) {
+      alert("Please enter a company trading name");
+      return;
+    }
+
+    if (formData.proSelected || formData.pocketSelected) {
+      if (!formData.purchaseType) {
+        alert("Please select buy or rent option");
+        return;
+      }
+    }
+
+    // Save to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("productSetupData", JSON.stringify(formData));
+      console.log("Saved to localStorage:", formData);
+    }
+
+    // Call onNext if provided
+    if (onNext) {
+      console.log("Calling onNext callback");
+      onNext();
+    } else {
+      console.warn("No onNext callback provided!");
+    }
   };
 
   return (
@@ -127,6 +221,28 @@ const ProductSetup = (props: Props) => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 md:gap-x-16 gap-y-9">
           {/* Left Column - Form */}
           <div className="space-y-8">
+            {/* Estimated Annual Turnover */}
+            <div className="space-y-2">
+              <Label htmlFor="estimatedTurnover" className="text-sm text-gray-700">
+                Estimated annual turnover on your card machine(s) and app
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">
+                  R
+                </span>
+                <Input
+                  type="number"
+                  id="estimatedTurnover"
+                  name="estimatedTurnover"
+                  value={formData.estimatedTurnover}
+                  onChange={handleInputChange}
+                  className="pl-7"
+                  placeholder="0"
+                  min="0"
+                />
+              </div>
+            </div>
+
             {/* Trading Name */}
             <div className="space-y-2">
               <div className="flex justify-between items-center">
@@ -144,6 +260,7 @@ const ProductSetup = (props: Props) => {
                 value={formData.tradingName}
                 onChange={handleInputChange}
                 maxLength={23}
+                placeholder="Your preferred trading name"
               />
               <div className="flex items-start gap-2 mt-2">
                 <Image src={recieptIcon} alt="bill" width={16} height={20} />
@@ -154,50 +271,52 @@ const ProductSetup = (props: Props) => {
               </div>
             </div>
 
-            {/* Purchase Type */}
-            <div className="space-y-3">
-              <Label className="text-sm text-gray-700">
-                Do you want to rent or buy your card machine(s)?
-              </Label>
-              <RadioGroup
-                value={formData.purchaseType}
-                onValueChange={(value) =>
-                  handleRadioChange("purchaseType", value)
-                }
-                className="flex gap-5"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="buy" id="purchase-buy" />
-                  <Label
-                    htmlFor="purchase-buy"
-                    className="font-normal cursor-pointer"
-                  >
-                    Buy
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="rent" id="purchase-rent" />
-                  <Label
-                    htmlFor="purchase-rent"
-                    className="font-normal cursor-pointer"
-                  >
-                    Rent
-                  </Label>
-                </div>
-              </RadioGroup>
+            {/* Purchase Type - Only show if at least one machine is selected */}
+            {(formData.proSelected || formData.pocketSelected) && (
+              <div className="space-y-3">
+                <Label className="text-sm text-gray-700">
+                  Do you want to rent or buy your card machine(s)?
+                </Label>
+                <RadioGroup
+                  value={formData.purchaseType}
+                  onValueChange={(value) =>
+                    handleRadioChange("purchaseType", value as "buy" | "rent")
+                  }
+                  className="flex gap-5"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="buy" id="purchase-buy" />
+                    <Label
+                      htmlFor="purchase-buy"
+                      className="font-normal cursor-pointer"
+                    >
+                      Buy
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="rent" id="purchase-rent" />
+                    <Label
+                      htmlFor="purchase-rent"
+                      className="font-normal cursor-pointer"
+                    >
+                      Rent
+                    </Label>
+                  </div>
+                </RadioGroup>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
-                <Info className="text-primary-dark" size={30} />
-                <p className="text-xs text-primary-dark">
-                  Rent a card machine and enjoy free maintenance, onsite
-                  support, replacements, and upgrades at no extra cost!*
-                  <br />
-                  <Link href="/terms-and-conditions" className="underline">
-                    T&Cs apply
-                  </Link>
-                </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
+                  <Info className="text-primary-dark" size={30} />
+                  <p className="text-xs text-primary-dark">
+                    Rent a card machine and enjoy free maintenance, onsite
+                    support, replacements, and upgrades at no extra cost!*
+                    <br />
+                    <Link href="/terms-and-conditions" className="underline">
+                      T&Cs apply
+                    </Link>
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* SimplyBLU Pro Card Machine */}
             <div
@@ -249,9 +368,11 @@ const ProductSetup = (props: Props) => {
                     Easily print, SMS or email receipts.
                   </p>
                   <div className="mt-3">
-                    <p className="text-lg font-medium text-gray-900">R 399.00</p>
+                    <p className="text-lg font-medium text-gray-900">
+                      R {getCurrentPricing().proDeviceFee.toFixed(2)}
+                    </p>
                     <p className="text-xs text-gray-600">
-                      Monthly rental fee
+                      {formData.purchaseType === "buy" ? "Purchase price" : "Monthly rental fee"}
                       <br />
                       (excl. VAT)
                     </p>
@@ -332,9 +453,11 @@ const ProductSetup = (props: Props) => {
                     Conveniently SMS and email receipts.
                   </p>
                   <div className="mt-3">
-                    <p className="text-lg font-medium text-gray-900">R 219.00</p>
+                    <p className="text-lg font-medium text-gray-900">
+                      R {getCurrentPricing().pocketDeviceFee.toFixed(2)}
+                    </p>
                     <p className="text-xs text-gray-600">
-                      Monthly rental fee
+                      {formData.purchaseType === "buy" ? "Purchase price" : "Monthly rental fee"}
                       <br />
                       (excl. VAT)
                     </p>
@@ -399,7 +522,7 @@ const ProductSetup = (props: Props) => {
             {/* Total Monthly Fee */}
             <div className="bg-blue-900 text-white rounded-lg p-6 text-center">
               <h2 className="text-lg font-medium mb-2">
-                Total monthly fee for the
+                {formData.purchaseType === "buy" ? "Total cost" : "Total monthly fee"} for the
                 <br />
                 card machine(s):
               </h2>
@@ -414,14 +537,21 @@ const ProductSetup = (props: Props) => {
 
             {/* Price Breakdown */}
             <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-6">
+              <div className="pb-4 border-b border-gray-200 text-center">
+                <p className="text-sm text-gray-600">
+                  Debit card transactions cost 2.50%, credit card transactions
+                  2.50%, and international transactions 2.50% (excluding VAT)
+                </p>
+              </div>
+
               <div>
                 <h3 className="text-lg text-gray-500 mb-3">
-                  SimplyBLU Pro monthly rental
+                  {formData.purchaseType === "buy" ? "SimplyBLU Pro purchase price" : "SimplyBLU Pro monthly rental"}
                 </h3>
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl">R</span>
                   <span className="text-4xl font-medium text-gray-800">
-                    798.00
+                    {getCurrentPricing().proDeviceFee.toFixed(2)}
                   </span>
                   <span className="text-sm text-gray-600">(excl. VAT)</span>
                 </div>
@@ -429,19 +559,33 @@ const ProductSetup = (props: Props) => {
 
               <div className="border-t border-gray-200 pt-6">
                 <h3 className="text-lg text-gray-500 mb-3">
-                  SimplyBLU Pocket monthly rental
+                  {formData.purchaseType === "buy" ? "SimplyBLU Pocket purchase price" : "SimplyBLU Pocket monthly rental"}
                 </h3>
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl">R</span>
                   <span className="text-4xl font-medium text-gray-800">
-                    219.00
+                    {getCurrentPricing().pocketDeviceFee.toFixed(2)}
+                  </span>
+                  <span className="text-sm text-gray-600">(excl. VAT)</span>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg text-gray-500 mb-3">
+                  Connectivity fee per card machine
+                </h3>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl">R</span>
+                  <span className="text-4xl font-medium text-gray-800">
+                    {getCurrentPricing().connectivityFee.toFixed(2)}
                   </span>
                   <span className="text-sm text-gray-600">(excl. VAT)</span>
                 </div>
               </div>
               <hr />
               <p className="text-sm text-gray-600 text-center pt-4">
-                The total will be charged to your account.
+                This excludes your SimplyBLU commission fee.<br />
+                The total will be charged on your business account.
               </p>
             </div>
 
@@ -534,6 +678,30 @@ const ProductSetup = (props: Props) => {
                 </div>
               </div>
             </div>
+
+        {/* Footer Navigation Buttons */}
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 mt-8 pt-6 border-t border-gray-200">
+          {onBack && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-primary hover:text-primary hover:bg-primary/10 w-full sm:w-auto"
+              onClick={onBack}
+            >
+              BACK
+            </Button>
+          )}
+          {onNext && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-primary hover:text-primary hover:bg-primary/10 w-full sm:w-auto ml-auto"
+              onClick={handleSubmit}
+            >
+              NEXT
+            </Button>
+          )}
+        </div>
           </div>
         </div>
       </div>

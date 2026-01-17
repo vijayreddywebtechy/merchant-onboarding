@@ -87,8 +87,8 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
     resolver: yupResolver(companyDetailsSchema) as any,
     mode: "onChange",
     defaultValues: {
-      registeredCompanyName: "ABC Consulting",
-      countryOfRegistration: "South Africa",
+      registeredCompanyName: "",
+      countryOfRegistration: "",
       addressType: "different",
       addressSearch: "",
       streetNumber: "",
@@ -116,7 +116,7 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
       if (merchantData) {
         const parsed = JSON.parse(merchantData);
         const businessDetails = parsed.businessDetails;
-        const companyInfo = parsed.companyInfo?.COMPANY_DATA?.Registration;
+        const companyInfo = parsed.selectedCompanyDetails?.COMPANY_DATA?.Registration;
         const selectedCompany = parsed.selectedCompany;
         const isSoleProprietor = parsed.isSoleProprietor;
         
@@ -124,7 +124,7 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
         const companyName = isSoleProprietor 
           ? businessDetails?.directorId || ""
           : (companyInfo?.ENT_NAME || selectedCompany?.name || "");
-        
+        console.log("Prefilling company details with:", parsed, companyName, companyInfo);
         const address = companyInfo || {};
         
         reset({

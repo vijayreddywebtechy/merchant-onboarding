@@ -6,7 +6,8 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import Image from "next/image";
 import merchantApp from "@/assets/images/general/mobile_app_device.png";
 import cardMachineMd from "@/assets/images/general/card_machine_md.png";
-import { Info, X } from "lucide-react";
+import pocketCardMachine from "@/assets/images/general/pocket_card_machine.png";
+import { Info, X, FileText, Download } from "lucide-react";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -16,6 +17,8 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { cardMachineSummarySchema } from "@/lib/validationSchemas";
+import { useCustomMutation } from "@/hooks/useCustomMutation";
+import { useDocumentMutation } from "@/hooks/useDocumentMutation";
 
 type CardMachineSummaryData = {
   cardMachineQuantity: string;
@@ -24,14 +27,129 @@ type CardMachineSummaryData = {
   agreementAccepted: boolean;
 };
 
+interface ProductSetupData {
+  tradingName: string;
+  purchaseType: "buy" | "rent";
+  proMachineCount: string;
+  pocketMachineCount: string;
+  proSelected: boolean;
+  pocketSelected: boolean;
+  estimatedTurnover: string;
+}
+
 interface Props {
   onNext?: () => void;
   onBack?: () => void;
 }
 
+// Pricing configuration
+const pricingConfig = {
+  rent: {
+    proDeviceFee: 399,
+    pocketDeviceFee: 399,
+    connectivityFee: 0,
+  },
+  buy: {
+    proDeviceFee: 1999,
+    pocketDeviceFee: 1999,
+    connectivityFee: 40,
+  }
+};
+
+// Industry classification mapping (ISIC4 codes)
+const industryClassificationMap: { [key: string]: string } = {
+  "agriculture": "74120",
+  "forestry": "02100",
+  "fishing": "03110",
+  "mining-coal": "05100",
+  "mining-metal": "07100",
+  "mining-other": "08990",
+  "food-manufacturing": "10100",
+  "beverage-manufacturing": "11010",
+  "textile-manufacturing": "13110",
+  "clothing-manufacturing": "14100",
+  "leather-manufacturing": "15110",
+  "wood-manufacturing": "16100",
+  "paper-manufacturing": "17010",
+  "printing": "18110",
+  "chemical-manufacturing": "20110",
+  "pharmaceutical-manufacturing": "21000",
+  "rubber-plastic-manufacturing": "22190",
+  "metal-manufacturing": "24100",
+  "electronics-manufacturing": "26100",
+  "electrical-equipment": "27100",
+  "machinery-manufacturing": "28130",
+  "motor-vehicle-manufacturing": "29100",
+  "furniture-manufacturing": "31000",
+  "electricity-supply": "35100",
+  "water-supply": "36000",
+  "construction-buildings": "41000",
+  "civil-engineering": "42100",
+  "construction-specialized": "43900",
+  "motor-vehicle-sales": "45100",
+  "wholesale-trade": "46900",
+  "retail-trade": "47110",
+  "land-transport": "49210",
+  "water-transport": "50110",
+  "air-transport": "51100",
+  "warehousing": "52100",
+  "accommodation": "55100",
+  "food-service": "56100",
+  "publishing": "58110",
+  "broadcasting": "60100",
+  "telecommunications": "61100",
+  "it-services": "62010",
+  "information-services": "63110",
+  "financial-services": "64190",
+  "insurance": "65120",
+  "financial-auxiliary": "66190",
+  "real-estate": "68100",
+  "legal-accounting": "69100",
+  "consulting": "70200",
+  "architecture-engineering": "71100",
+  "research-development": "72100",
+  "advertising": "73100",
+  "veterinary": "75000",
+  "rental-leasing": "77100",
+  "employment-services": "78100",
+  "travel-services": "79110",
+  "security-services": "80100",
+  "facilities-services": "81100",
+  "office-support": "82190",
+  "education": "85100",
+  "healthcare": "86100",
+  "social-work": "87100",
+  "arts-entertainment": "90000",
+  "gambling": "92000",
+  "sports-recreation": "93110",
+  "membership-organizations": "94110",
+  "repair-services": "95110",
+  "personal-services": "96020",
+  "other": "99000",
+};
+
 export default function CardMachineSummary({ onNext, onBack }: Props) {
   const [open, setOpen] = useState(false);
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [isLoadingDocument, setIsLoadingDocument] = useState(false);
+  const [isSigning, setIsSigning] = useState(false);
+  const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const [productData, setProductData] = useState<ProductSetupData | null>(null);
+
+  const { mutate: createContract } = useCustomMutation({
+    url: `/api/create-contract`,
+    method: "POST",
+  });
+
+  const { mutate: retrieveDocument } = useDocumentMutation({
+    url: `/api/retrieve-document`,
+  });
+
+  const { mutate: setDigitalOffer } = useCustomMutation({
+    url: `/api/set-digital-offer`,
+    method: "PUT",
+  });
 
   const {
     control,
@@ -50,12 +168,34 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
     },
   });
 
+  // Load product setup data from localStorage
+  useEffect(() => {
+    const savedProductData = localStorage.getItem("productSetupData");
+    if (savedProductData) {
+      setProductData(JSON.parse(savedProductData));
+    }
+  }, []);
+
   useEffect(() => {
     const data = localStorage.getItem("cardMachineSummaryFormData");
     if (data) {
       reset(JSON.parse(data));
     }
   }, [reset]);
+
+  const calculateTotal = () => {
+    if (!productData) return 0;
+    const pricing = productData.purchaseType ? pricingConfig[productData.purchaseType] : pricingConfig.rent;
+    const proCount = productData.proSelected ? parseInt(productData.proMachineCount) || 0 : 0;
+    const pocketCount = productData.pocketSelected ? parseInt(productData.pocketMachineCount) || 0 : 0;
+    
+    const proDeviceFee = proCount * pricing.proDeviceFee;
+    const pocketDeviceFee = pocketCount * pricing.pocketDeviceFee;
+    const totalMachines = proCount + pocketCount;
+    const connectivityFee = totalMachines * pricing.connectivityFee;
+    
+    return proDeviceFee + pocketDeviceFee + connectivityFee;
+  };
 
   // Save form data in real-time to localStorage
   useEffect(() => {
@@ -65,18 +205,350 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
     return () => subscription.unsubscribe();
   }, [watch]);
 
-  // Expose validation through window object for Stepper to call
+  // Function to load the contract document (retrieves existing document)
+  const loadContractDocument = async () => {
+    setIsLoadingDocument(true);
+    
+    try {
+      // Get preapplication data for document retrieval
+      const preApplicationResponse = JSON.parse(
+        localStorage.getItem("preApplicationResponse") || "{}"
+      );
+      const businessBPGUID = preApplicationResponse.businessBPGUID;
+      const contractDocumentId = preApplicationResponse.contractDocumentId;
+
+      if (!businessBPGUID) {
+        alert("Business GUID not found. Please complete the application process.");
+        setIsLoadingDocument(false);
+        return;
+      }
+
+      if (!contractDocumentId) {
+        alert("Contract document not found. Please refresh and try again.");
+        setIsLoadingDocument(false);
+        return;
+      }
+
+      console.log("Retrieving document with contentId:", contractDocumentId);
+
+      // Prepare document retrieval payload
+      const documentPayload = {
+        guId: businessBPGUID,
+        filename: "",
+        documentId: "0",
+        contentId: contractDocumentId,
+        businessFlag: "P"
+      };
+
+      // Retrieve the document
+      retrieveDocument(
+        {
+          body: documentPayload,
+        },
+        {
+          onSuccess: (blob) => {
+            console.log("Document retrieved successfully");
+            
+            // Create a blob URL for the PDF
+            const url = URL.createObjectURL(blob);
+            
+            // Open PDF in new tab
+            window.open(url, '_blank');
+            
+            // Also store the URL for download button
+            setDocumentUrl(url);
+            setIsLoadingDocument(false);
+
+            // Clean up the URL after a delay
+            setTimeout(() => {
+              if (url) {
+                URL.revokeObjectURL(url);
+              }
+            }, 1000);
+          },
+          onError: (error) => {
+            console.error("Error retrieving document:", error);
+            setIsLoadingDocument(false);
+            alert("Error loading document. Please try again.");
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Error in loadContractDocument:", error);
+      setIsLoadingDocument(false);
+    }
+  };
+
+  // Load document when dialog opens
   useEffect(() => {
-    (window as any).__cardMachineSummaryValidate = async () => {
-      const isValid = await new Promise<boolean>((resolve) => {
-        handleSubmit(
-          () => resolve(true),
-          () => resolve(false)
-        )();
-      });
-      return isValid;
+    if (open && !documentUrl && !isLoadingDocument) {
+      loadContractDocument();
+    }
+  }, [open]);
+
+  // Cleanup blob URL when component unmounts
+  useEffect(() => {
+    return () => {
+      if (documentUrl) {
+        URL.revokeObjectURL(documentUrl);
+      }
     };
-  }, [handleSubmit]);
+  }, [documentUrl]);
+
+  const handleSignContract = async () => {
+    setIsSigning(true);
+    
+    try {
+      // Mark contract as signed
+      localStorage.setItem("contractSigned", "true");
+      localStorage.setItem("contractSignedTimestamp", new Date().toISOString());
+      
+      console.log("Contract signed successfully");
+      
+      setIsSigning(false);
+      setOpen(false);
+      
+      // Proceed to next step
+      if (onNext) {
+        onNext();
+      }
+    } catch (error: any) {
+      console.error("Error signing contract:", error);
+      setIsSigning(false);
+      alert(error.message || "Error signing contract. Please try again.");
+    }
+  };
+
+  // Function to handle confirm button - submits digital offer and creates contract
+  const handleConfirm = async () => {
+    setIsSubmittingOffer(true);
+
+    try {
+      // Get all required data from localStorage
+      const preApplicationResponse = JSON.parse(
+        localStorage.getItem("preApplicationResponse") || "{}"
+      );
+      const productSetupData = localStorage.getItem("productSetupData");
+      const companyDetailsData = localStorage.getItem("companyDetailsFormData");
+      const deliveryDetailsData = localStorage.getItem("deliveryDetailsFormData");
+      const bankingDetailsData = localStorage.getItem("companyBankingDetailsFormData");
+      const personalDetailsData = localStorage.getItem("personalDetailsFormData");
+      
+      const offerId = preApplicationResponse.digitalOfferId;
+
+      if (!offerId) {
+        console.error("No offer ID found");
+        alert("Error: Offer ID not found. Please complete the pre-application process first.");
+        setIsSubmittingOffer(false);
+        return;
+      }
+
+      if (!productSetupData) {
+        alert("Product setup data not found");
+        setIsSubmittingOffer(false);
+        return;
+      }
+
+      const productData = JSON.parse(productSetupData);
+      const companyData = companyDetailsData ? JSON.parse(companyDetailsData) : {};
+      const deliveryData = deliveryDetailsData ? JSON.parse(deliveryDetailsData) : {};
+      const bankingData = bankingDetailsData ? JSON.parse(bankingDetailsData) : {};
+      const personalData = personalDetailsData ? JSON.parse(personalDetailsData) : {};
+
+      console.log("=== DATA FROM LOCALSTORAGE ===");
+      console.log("productData:", productData);
+      console.log("companyData:", companyData);
+      console.log("deliveryData:", deliveryData);
+      console.log("bankingData:", bankingData);
+      console.log("personalData:", personalData);
+      console.log("preApplicationResponse:", preApplicationResponse);
+      console.log("================================");
+      console.log("Preparing digital offer submission...");
+
+      // Calculate pricing
+      const purchaseType: "buy" | "rent" = (productData.purchaseType === "buy" || productData.purchaseType === "rent") 
+        ? productData.purchaseType 
+        : "rent";
+      const pricing = pricingConfig[purchaseType];
+      const proCount = productData.proSelected ? parseInt(productData.proMachineCount) || 0 : 0;
+      const pocketCount = productData.pocketSelected ? parseInt(productData.pocketMachineCount) || 0 : 0;
+      const totalMachines = proCount + pocketCount;
+      const isBuy = productData.purchaseType === "buy";
+      
+      // Calculate device purchase price
+      const devicePurchasePrice = isBuy ? pricing.proDeviceFee : 0;
+      
+      // Build pricing conditions - empty array for now as per working payload
+      const pricCond: any[] = [];
+
+      // Build device entry
+      const deviceEntry: any = {
+        nbrOfDevices: totalMachines,
+        deviceModel: "Business to provide model",
+      };
+
+      // Prepare installation address
+      const deviceReqdDate = deliveryData.deliveryDate 
+        ? String(deliveryData.deliveryDate).split('T')[0] 
+        : new Date().toISOString().split('T')[0];
+
+      // Map industry classification to ISIC4 code
+      console.log("companyData.industryClassification:", companyData.industryClassification);
+      const merchantIndustryCode = industryClassificationMap[companyData.industryClassification] || companyData.industryClassification || "74120";
+      console.log("merchantIndustryCode:", merchantIndustryCode);
+      console.log("Is code in map?", !!industryClassificationMap[companyData.industryClassification]);
+
+      // Build the digital offer payload matching the working example
+      const digitalOfferPayload = {
+        offerId: offerId,
+        items: [
+          {
+            merchantSolution: {
+              prodDetails: {
+                tradingName: productData.tradingName || "",
+                serviceDescription: "A compact POS device",
+                rentOrBuy: isBuy ? "B" : "R",
+                registrationEmailAddr: personalData.email || companyData.email || "",
+                numberOfDevices: String(totalMachines),
+                merchantIndustry: merchantIndustryCode,
+                instalCountydistrict: deliveryData.suburb || companyData.suburb || "To be confirmed",
+                instalCountrycode: "ZA",
+                deviceReqdDate: deviceReqdDate,
+                contactTelephoneNbr: deliveryData.contactPersonNumber || personalData.phoneNumber || "",
+                contactName: `${deliveryData.contactPersonName || ""} ${deliveryData.contactPersonSurname || ""}`.trim() || `${personalData.fname || ""} ${personalData.lname || ""}`.trim() || "",
+                cashback: "N",
+                businessMobileNbr: personalData.phoneNumber || "",
+                businessEmailAddr: personalData.email || companyData.email || "",
+                billingCycle: "D",
+                bankingPorIbt: bankingData.branchCode || "",
+                bankingBankName: bankingData.branchCode ? `000${String(bankingData.branchCode).trim()}` : "",
+                bankingBank: "confirm mapping",
+                bankingAccNo: (bankingData.accountNumber || "").trim(),
+                bankingAccHolderName: bankingData.accountHolderName || "",
+                allowRefunds: "N",
+                accountNbr: "",
+                acceptRCSNum: "true",
+                acceptDinersNum: "true",
+                acceptAmExpressNum: "true"
+              },
+              pricCond: pricCond,
+              device: [deviceEntry],
+              acceptFlag: true
+            },
+            itemID: preApplicationResponse.itemNo || preApplicationResponse.itemID || "0100"
+          }
+        ]
+      };
+
+      console.log("Digital Offer Payload:", digitalOfferPayload);
+      console.log("Offer ID being used:", digitalOfferPayload.offerId);
+
+      // STEP 1: Submit digital offer FIRST
+      await new Promise<void>((resolve, reject) => {
+        setDigitalOffer(
+          {
+            body: digitalOfferPayload,
+          },
+          {
+            onSuccess: (res) => {
+              console.log("Digital offer submitted successfully:", res);
+              resolve();
+            },
+            onError: (error: any) => {
+              console.error("Error submitting digital offer:", error);
+              
+              const errorData = error.response?.data;
+              let errorMessage = "Failed to submit digital offer. Please try again.";
+              
+              if (errorData?.detail) {
+                errorMessage = errorData.detail;
+                
+                // Check if offer is not in draft status
+                if (errorMessage.includes("not in draft status")) {
+                  errorMessage = "This offer has already been processed and cannot be modified.";
+                }
+              } else if (errorData?.error) {
+                errorMessage = errorData.error;
+              } else if (error.message) {
+                errorMessage = error.message;
+              }
+              
+              reject(new Error(errorMessage));
+            },
+          }
+        );
+      });
+
+      console.log("Digital offer submitted, now creating contract...");
+
+      // STEP 2: Create contract AFTER digital offer succeeds
+      await new Promise<void>((resolve, reject) => {
+        createContract(
+          {
+            body: {
+              createContractRequest: {
+                offerId: offerId,
+                headerDetails: {
+                  sourcePlatform: null,
+                  securityDetails: {
+                    tokenType: null,
+                    generateToken: false,
+                    accessToken: null
+                  },
+                  respondToAddress: null,
+                  requestTraceId: null,
+                  requestCorrelation: null,
+                  processType: null,
+                  originatorName: null,
+                  isSynchronous: false,
+                  digitalId: null,
+                  customerInterface: null,
+                  channelId: null
+                }
+              },
+            },
+          },
+          {
+            onSuccess: (res) => {
+              console.log("Contract created successfully:", res);
+              
+              // Store contract document ID if available
+              const contractDoc = res.contracts?.find(
+                (doc: any) => doc.documentCode === "SHAREHOLDCT"
+              );
+              
+              if (contractDoc?.documentId) {
+                console.log("Contract Document ID:", contractDoc.documentId);
+                // Update preApplicationResponse with contract document ID
+                const updatedResponse = {
+                  ...preApplicationResponse,
+                  contractDocumentId: contractDoc.documentId
+                };
+                localStorage.setItem("preApplicationResponse", JSON.stringify(updatedResponse));
+              }
+              
+              resolve();
+            },
+            onError: (error) => {
+              console.error("Error creating contract:", error);
+              reject(error);
+            },
+          }
+        );
+      });
+
+      console.log("Contract created successfully");
+      
+      setIsSubmittingOffer(false);
+      
+      // STEP 3: Open dialog to show contract
+      setOpen(true);
+    } catch (error: any) {
+      console.error("Error in handleConfirm:", error);
+      setIsSubmittingOffer(false);
+      alert(error.message || "Error processing your request. Please try again.");
+    }
+  };
 
   return (
     <div>
@@ -93,22 +565,46 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
           </p>
         </div>
 
+        {/* Summary Information */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Product Setup Summary</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-gray-600">Trading Name:</span>
+              <span className="ml-2 font-medium text-gray-900">{productData?.tradingName || "Not set"}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Estimated Turnover:</span>
+              <span className="ml-2 font-medium text-gray-900">
+                R {productData?.estimatedTurnover ? parseFloat(productData.estimatedTurnover).toLocaleString() : "0"}
+              </span>
+            </div>
+            <div>
+              <span className="text-gray-600">Purchase Type:</span>
+              <span className="ml-2 font-medium text-gray-900 capitalize">{productData?.purchaseType || "N/A"}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Total Monthly Fee:</span>
+              <span className="ml-2 font-medium text-gray-900">R {calculateTotal().toFixed(2)} (excl. VAT)</span>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Card Machine */}
-          <>
-            {/* Card Type One */}
+          {/* SimplyBLU Pro Card Machine - Only show if selected */}
+          {productData?.proSelected && (
             <div className="border border-gray-200 rounded-2xl overflow-hidden">
               {/* Card Machine Image */}
               <div>
                 <div className="h-14 bg-gradient-to-tr from-blue-900 to-blue-600 relative">
                   <span className="absolute bg-gradient-to-tr from-primary to-blue-600 text-white px-4 py-1 rounded-br-2xl text-xs">
-                    INCLUDES INSTALLATION
+                    {productData.purchaseType === "rent" ? "RENTAL - INCLUDES INSTALLATION" : "PURCHASE - INCLUDES INSTALLATION"}
                   </span>
                 </div>
                 <div className="bg-primary-dark flex justify-center p-2">
                   <Image
                     src={cardMachineMd}
-                    alt="card_machine_md"
+                    alt="SimplyBLU Pro"
                     width={386}
                     height={360}
                   />
@@ -127,7 +623,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
                 {/* Quantity */}
                 <div>
                   <div className="text-5xl font-medium text-gray-900 mb-2">
-                    1
+                    {productData.proMachineCount}
                   </div>
                   <p className="text-xs text-gray-600 uppercase tracking-wide">
                     Number of card
@@ -141,16 +637,11 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
                   <div className="flex items-start gap-1">
                     <span className="text-xl text-gray-900">R</span>
                     <span className="text-4xl font-medium text-gray-900">
-                      380.00
+                      {(parseInt(productData.proMachineCount) * (productData.purchaseType === "buy" ? pricingConfig.buy.proDeviceFee : pricingConfig.rent.proDeviceFee)).toFixed(2)}
                     </span>
-                    <div className="relative inline-block ml-1">
-                      <button type="button" className="focus:outline-none">
-                        <Info size={18} className="text-white fill-primary" />
-                      </button>
-                    </div>
                   </div>
                   <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
-                    Total monthly rental fee
+                    Total {productData.purchaseType === "buy" ? "purchase" : "monthly rental"} fee
                     <br />
                     (excl. VAT)
                   </p>
@@ -161,7 +652,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
                   <div className="flex items-baseline gap-1">
                     <span className="text-xl text-gray-900">R</span>
                     <span className="text-4xl font-medium text-gray-900">
-                      0
+                      {(parseInt(productData.proMachineCount) * (productData.purchaseType === "buy" ? pricingConfig.buy.connectivityFee : 0)).toFixed(2)}
                     </span>
                   </div>
                   <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
@@ -172,20 +663,22 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Card Type Two */}
+          {/* SimplyBLU Pocket Card Machine - Only show if selected */}
+          {productData?.pocketSelected && (
             <div className="border border-gray-200 rounded-2xl overflow-hidden">
               {/* Card Machine Image */}
               <div>
                 <div className="h-14 bg-gradient-to-tr from-blue-900 to-blue-600 relative">
                   <span className="absolute bg-gradient-to-tr from-primary to-blue-600 text-white px-4 py-1 rounded-br-2xl text-xs">
-                    INCLUDES INSTALLATION
+                    {productData.purchaseType === "rent" ? "RENTAL - INCLUDES INSTALLATION" : "PURCHASE - INCLUDES INSTALLATION"}
                   </span>
                 </div>
                 <div className="bg-primary-dark flex justify-center p-2">
                   <Image
-                    src={cardMachineMd}
-                    alt="card_machine_md"
+                    src={pocketCardMachine}
+                    alt="SimplyBLU Pocket"
                     width={386}
                     height={360}
                   />
@@ -195,304 +688,135 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
               {/* Machine Name */}
               <div className="p-6">
                 <h2 className="text-2xl font-medium text-gray-900">
-                  Merchant App
+                  SimplyBLU Pocket
                 </h2>
               </div>
 
               {/* Pricing Card */}
               <div className="bg-gray-100 rounded-lg p-6 space-y-6">
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  Download the SimplyBLU Merchant App and register with the
-                  merchant number provided at the end of your application. A
-                  merchant commission fee may apply for digital payments.
-                </p>
-                {/* Benefits Section */}
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Benefits
-                </h3>
+                {/* Quantity */}
+                <div>
+                  <div className="text-5xl font-medium text-gray-900 mb-2">
+                    {productData.pocketMachineCount}
+                  </div>
+                  <p className="text-xs text-gray-600 uppercase tracking-wide">
+                    Number of card
+                    <br />
+                    machine(s)
+                  </p>
+                </div>
 
-                <ul className="space-y-4">
-                  {/* Benefit 1 */}
-                  <li className="flex items-start gap-3">
-                    <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      Turn your Android phone into a card machine with Mobile
-                      Pay. Send payment links or e-invoices to get paid
-                      remotely.
-                    </p>
-                  </li>
+                {/* Monthly Rental Fee */}
+                <div>
+                  <div className="flex items-start gap-1">
+                    <span className="text-xl text-gray-900">R</span>
+                    <span className="text-4xl font-medium text-gray-900">
+                      {(parseInt(productData.pocketMachineCount) * (productData.purchaseType === "buy" ? pricingConfig.buy.pocketDeviceFee : pricingConfig.rent.pocketDeviceFee)).toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
+                    Total {productData.purchaseType === "buy" ? "purchase" : "monthly rental"} fee
+                    <br />
+                    (excl. VAT)
+                  </p>
+                </div>
 
-                  {/* Benefit 2 */}
-                  <li className="flex items-start gap-3">
-                    <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      Gain real-time insights to understand your customers
-                      needs.
-                    </p>
-                  </li>
-
-                  {/* Benefit 3 */}
-                  <li className="flex items-start gap-3">
-                    <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      Access your sales report wherever and whenever you need.
-                    </p>
-                  </li>
-
-                  {/* Benefit 4 */}
-                  <li className="flex items-start gap-3">
-                    <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      Make quick sales, process refunds and manage stock at
-                      lightning speed.
-                    </p>
-                  </li>
-
-                  {/* Benefit 5 */}
-                  <li className="flex items-start gap-3">
-                    <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      Launch an online store with our Online Store Builder – no
-                      coding required.
-                    </p>
-                  </li>
-                </ul>
+                {/* Connectivity Fee */}
+                <div className="pt-4 border-t border-gray-300">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-xl text-gray-900">R</span>
+                    <span className="text-4xl font-medium text-gray-900">
+                      {(parseInt(productData.pocketMachineCount) * (productData.purchaseType === "buy" ? pricingConfig.buy.connectivityFee : 0)).toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
+                    Total monthly connectivity fee
+                    <br />
+                    (excl. VAT)
+                  </p>
+                </div>
               </div>
             </div>
-          </>
+          )}
 
-          {/* Right Column - Merchant App */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6">
-            <div className="flex items-start gap-4 mb-6">
-              {/* App Icon */}
-              <Image
-                src={merchantApp}
-                alt="Merchant App"
-                className="w-24 md:w-28 rounded-lg shadow-md"
-              />
-
-              {/* App Info */}
-              <div>
-                <h2 className="text-xl font-medium text-secondary mb-1">
-                  Merchant App
-                </h2>
-                <p className="text-sm text-gray-600 mb-3">Free download</p>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  Download the SimplyBLU Merchant App and register with the
-                  merchant number provided at the end of your application. A
-                  merchant commission fee may apply for digital payments.
-                </p>
+          {/* Merchant App - Always show */}
+          <div className="border border-gray-200 rounded-2xl overflow-hidden">
+            {/* Header */}
+            <div>
+              <div className="h-14 bg-gradient-to-tr from-blue-900 to-blue-600 relative">
+                <span className="absolute bg-gradient-to-tr from-primary to-blue-600 text-white px-4 py-1 rounded-br-2xl text-xs">
+                  FREE DOWNLOAD
+                </span>
+              </div>
+              <div className="bg-primary-dark flex justify-center p-8">
+                <Image
+                  src={merchantApp}
+                  alt="Merchant App"
+                  width={200}
+                  height={360}
+                  className="object-contain"
+                />
               </div>
             </div>
 
-            {/* Benefits Section */}
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Benefits</h3>
+            {/* App Name */}
+            <div className="p-6">
+              <h2 className="text-2xl font-medium text-gray-900">
+                Merchant App
+              </h2>
+              <p className="text-sm text-gray-600 mt-2">Free download</p>
+            </div>
 
-            <ul className="space-y-4">
-              {/* Benefit 1 */}
-              <li className="flex items-start gap-3">
-                <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  Turn your Android phone into a card machine with Mobile Pay.
-                  Send payment links or e-invoices to get paid remotely.
-                </p>
-              </li>
+            {/* Benefits */}
+            <div className="bg-gray-100 rounded-lg p-6 space-y-6">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                Download the SimplyBLU Merchant App and register with the
+                merchant number provided at the end of your application. A
+                merchant commission fee may apply for digital payments.
+              </p>
 
-              {/* Benefit 2 */}
-              <li className="flex items-start gap-3">
-                <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  Gain real-time insights to understand your customers needs.
-                </p>
-              </li>
+              <h3 className="text-lg font-medium text-gray-900">Benefits</h3>
 
-              {/* Benefit 3 */}
-              <li className="flex items-start gap-3">
-                <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  Access your sales report wherever and whenever you need.
-                </p>
-              </li>
-
-              {/* Benefit 4 */}
-              <li className="flex items-start gap-3">
-                <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  Make quick sales, process refunds and manage stock at
-                  lightning speed.
-                </p>
-              </li>
-
-              {/* Benefit 5 */}
-              <li className="flex items-start gap-3">
-                <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  Launch an online store with our Online Store Builder – no
-                  coding required.
-                </p>
-              </li>
-            </ul>
+              <ul className="space-y-4">
+                {[
+                  "Turn your Android phone into a card machine with Mobile Pay. Send payment links or e-invoices to get paid remotely.",
+                  "Gain real-time insights to understand your customers needs.",
+                  "Access your sales report wherever and whenever you need.",
+                  "Make quick sales, process refunds and manage stock at lightning speed.",
+                  "Launch an online store with our Online Store Builder – no coding required."
+                ].map((benefit, idx) => (
+                  <li key={idx} className="flex items-start gap-3">
+                    <div className="shrink-0 w-5 h-5 bg-primary-dark text-white rounded-full flex items-center justify-center mt-0.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed">{benefit}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="flex mt-10 gap-4">
-        <Button variant="outline" className="w-full md:w-1/4" onClick={onBack} disabled={isValidating}>
+        <Button variant="outline" className="w-full md:w-1/4" onClick={onBack} disabled={isValidating || isSubmittingOffer}>
           Back
         </Button>
         <Button 
           className="w-full md:w-1/4" 
-          onClick={() => setOpen(true)}
-          disabled={isValidating}
+          onClick={handleConfirm}
+          disabled={isValidating || isSubmittingOffer}
         >
-          Confirm
+          {isSubmittingOffer ? "PROCESSING..." : "CONFIRM"}
         </Button>
       </div>
 
 
       {/* Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] p-0 gap-0 overflow-hidden border-none rounded-2xl [&>button]:hidden">
+        <DialogContent className="max-w-6xl w-[95vw] max-h-[90vh] p-0 gap-0 overflow-hidden border-none rounded-2xl [&>button]:hidden">
           {/* Header */}
           <DialogHeader className="bg-gradient-to-r from-primary-dark to-primary p-4 sm:p-6 relative">
             <DialogTitle className="text-lg sm:text-xl md:text-2xl text-center font-normal text-white pr-8">
@@ -509,96 +833,146 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
             </DialogClose>
           </DialogHeader>
 
-          {/* Scrollable Content */}
-          <div className="px-6 py-8 overflow-y-auto max-h-[calc(90vh-180px)]">
-            <div className="max-w-3xl mx-auto space-y-6">
-              <h3 className="text-gray-800 text-lg md:text-xl font-medium leading-relaxed">
-                By clicking sign, I (being the duly authorised representative of
-                the company):
-              </h3>
-
-              <div className="space-y-6 text-gray-700">
-                <div className="flex gap-4">
-                  <span className="text-blue-600 font-bold mt-1">•</span>
-                  <div className="flex-1 space-y-3">
-                    <p className="text-sm md:text-base leading-relaxed">
-                      Confirm that I have read, understood and accept the
-                      agreement on behalf of the company
-                    </p>
-                    <button
-                      className="text-primary hover:text-primary-dark underline text-sm md:text-base font-medium transition-colors"
-                    >
-                      SimplyBLU Application information, disclosures and T&Cs
-                    </button>
-                  </div>
+          {/* Document Viewer */}
+          <div className="flex-1 overflow-hidden flex flex-col max-h-[calc(90vh-180px)]">
+            {isLoadingDocument ? (
+              <div className="flex-1 flex items-center justify-center p-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading contract document...</p>
+                  <p className="text-sm text-gray-500 mt-2">The document will open in a new tab</p>
                 </div>
+              </div>
+            ) : (
+              <div className="flex-1 px-6 py-8 overflow-y-auto">
+                <div className="max-w-3xl mx-auto space-y-6">
+                  {documentUrl && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                      <div className="flex items-center gap-2 text-green-800">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <p className="font-medium">Contract document opened in new tab</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={loadContractDocument}
+                        className="mt-2 text-sm text-green-700 hover:text-green-900 underline"
+                      >
+                        Click here if the document didn't open
+                      </button>
+                    </div>
+                  )}
 
-                <div className="flex gap-4">
-                  <span className="text-blue-600 font-bold mt-1">•</span>
-                  <div className="space-y-4 flex-1">
-                    <p className="text-sm md:text-base leading-relaxed">
-                      Acknowledge that even though I have accepted the agreement
-                      on behalf of the company, it does not mean that the
-                      process is finalised. The account application/s will only
-                      be submitted for approval once I have successfully
-                      completed the web facial recognition process.
-                    </p>
+                  <h3 className="text-gray-800 text-lg md:text-xl font-medium leading-relaxed">
+                    By clicking sign, I (being the duly authorised representative of
+                    the company):
+                  </h3>
 
-                    <p className="text-sm md:text-base leading-relaxed">
-                      Warrant on behalf of the company to the Bank on the date
-                      of acceptance of the agreement and for the duration of the
-                      agreement that:
-                    </p>
+                  <div className="space-y-6 text-gray-700">
+                    <div className="flex gap-4">
+                      <span className="text-blue-600 font-bold mt-1">•</span>
+                      <div className="flex-1 space-y-3">
+                        <p className="text-sm md:text-base leading-relaxed">
+                          Confirm that I have read, understood and accept the
+                          agreement on behalf of the company
+                        </p>
+                        <button
+                          type="button"
+                          onClick={loadContractDocument}
+                          className="flex items-center gap-2 text-primary hover:text-primary-dark underline text-sm md:text-base font-medium transition-colors"
+                          disabled={isLoadingDocument}
+                        >
+                          <FileText className="w-4 h-4" />
+                          {isLoadingDocument ? "Loading..." : "View SimplyBLU Application information, disclosures and T&Cs"}
+                        </button>
+                      </div>
+                    </div>
 
-                    <ul className="space-y-3 bg-gray-50 rounded-lg p-4">
-                      {[
-                        "I am duly authorised to act on behalf of the company.",
-                        "The agreement constitutes valid and binding obligations on the company.",
-                        "The account/s are subject to the terms of the agreement.",
-                        "The terms of the agreement do not conflict with and are not in breach of the terms of any other agreement, undertaking or act that is binding on the company.",
-                        "All information provided to the Bank on behalf of the company in connection with the agreement is accurate, current and complete.",
-                        "The company is not in default in respect of any of its obligations in connection with the agreement and no default has occurred.",
-                      ].map((text, idx) => (
-                        <li key={idx} className="flex gap-3">
-                          <span className="text-blue-600 text-sm mt-1">•</span>
-                          <p className="text-sm md:text-base leading-relaxed flex-1">
-                            {text}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="flex gap-4">
+                      <span className="text-blue-600 font-bold mt-1">•</span>
+                      <div className="space-y-4 flex-1">
+                        <p className="text-sm md:text-base leading-relaxed">
+                          Acknowledge that even though I have accepted the agreement
+                          on behalf of the company, it does not mean that the
+                          process is finalised. The account application/s will only
+                          be submitted for approval once I have successfully
+                          completed the web facial recognition process.
+                        </p>
+
+                        <p className="text-sm md:text-base leading-relaxed">
+                          Warrant on behalf of the company to the Bank on the date
+                          of acceptance of the agreement and for the duration of the
+                          agreement that:
+                        </p>
+
+                        <ul className="space-y-3 bg-gray-50 rounded-lg p-4">
+                          {[
+                            "I am duly authorised to act on behalf of the company.",
+                            "The agreement constitutes valid and binding obligations on the company.",
+                            "The account/s are subject to the terms of the agreement.",
+                            "The terms of the agreement do not conflict with and are not in breach of the terms of any other agreement, undertaking or act that is binding on the company.",
+                            "All information provided to the Bank on behalf of the company in connection with the agreement is accurate, current and complete.",
+                            "The company is not in default in respect of any of its obligations in connection with the agreement and no default has occurred.",
+                          ].map((text, idx) => (
+                            <li key={idx} className="flex gap-3">
+                              <span className="text-blue-600 text-sm mt-1">•</span>
+                              <p className="text-sm md:text-base leading-relaxed flex-1">
+                                {text}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Footer with Action Button */}
+          {/* Footer with Action Buttons */}
           <div className="border-t bg-gray-50 px-6 py-4">
-            <div className="max-w-3xl mx-auto flex justify-center gap-4">
-              <Button
-                variant="outline"
-                className="w-full md:w-1/3"
-                size="md"
-                onClick={() => setOpen(false)}
-              >
-                CANCEL
-              </Button>
-              <Button
-                variant="default"
-                className="w-full md:w-1/3"
-                size="md"
-                onClick={async () => {
-                  const isValid = await (window as any).__cardMachineSummaryValidate?.();
-                  if (isValid) {
-                    setOpen(false);
-                    if (onNext) onNext();
-                  }
-                }}
-                disabled={isValidating}
-              >
-                {isValidating ? "SIGNING..." : "SIGN"}
-              </Button>
+            <div className="max-w-3xl mx-auto">
+              {documentUrl && (
+                <div className="mb-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (documentUrl) {
+                        const link = document.createElement('a');
+                        link.href = documentUrl;
+                        link.download = 'contract.pdf';
+                        link.click();
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 text-primary hover:text-primary-dark text-sm font-medium"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Contract
+                  </button>
+                </div>
+              )}
+              <div className="flex justify-center gap-4">
+                <Button
+                  variant="outline"
+                  className="w-full md:w-1/3"
+                  size="md"
+                  onClick={() => setOpen(false)}
+                  disabled={isSigning}
+                >
+                  CANCEL
+                </Button>
+                <Button
+                  variant="default"
+                  className="w-full md:w-1/3"
+                  size="md"
+                  onClick={handleSignContract}
+                  disabled={isSigning || isLoadingDocument}
+                >
+                  {isSigning ? "SIGNING..." : "SIGN"}
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

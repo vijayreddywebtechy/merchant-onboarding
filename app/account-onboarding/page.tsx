@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import BusinessDetailsForm from "@/components/onboarding/BusinessDetailsForm";
 import TellusMore from "@/components/onboarding/TellusMore";
 import VerifyBlock from "@/components/VerifyIdentity/VerifyBlock";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { useOnboardingSubmit } from "@/hooks/useOnboardingSubmit";
 import { useAccessToken } from "@/hooks/useAccessToken";
 
@@ -22,12 +23,18 @@ const Page = (props: Props) => {
   useEffect(() => {
     const prodId = searchParams.get("prodId");
     const prOpt = searchParams.get("prOpt");
+    const step = searchParams.get("step");
 
     if (prodId === "ZPOS" && prOpt === "ZSIB") {
       const existingData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
       existingData.prodId = prodId;
       existingData.prOpt = prOpt;
       localStorage.setItem("merchantOnboardingData", JSON.stringify(existingData));
+    }
+
+    // Handle step parameter for direct navigation
+    if (step === "verification") {
+      setCurrentStep(2); // Show VerifyBlock
     }
   }, [searchParams]);
 
@@ -106,13 +113,60 @@ const Page = (props: Props) => {
         throw new Error(data.error || "Failed to fetch customer data");
       }
 
-      // Store customer data
+      // Extract customers array from response
+      const customersList = data.customers || [];
+
+      // For the first customer only, fetch their detailed information
+      let customersWithDetails: any[] = [];
+      
+      if (Array.isArray(customersList) && customersList.length > 0) {
+        // Get details only for the first customer
+        try {
+          const firstCustomer = customersList[0];
+          const detailsResponse = await fetch(`/api/get-customer-details/${firstCustomer.uuid}`, { headers });
+          
+          if (detailsResponse.ok) {
+            const detailsData = await detailsResponse.json();
+            customersWithDetails = [
+              {
+                ...firstCustomer,
+                customerDetails: detailsData,
+              },
+              ...customersList.slice(1), // Include remaining customers without details
+            ];
+          } else {
+            console.error(`Failed to fetch details for customer ${firstCustomer.uuid}`);
+            customersWithDetails = customersList;
+          }
+        } catch (err) {
+          console.error(`Error fetching details for first customer:`, err);
+          customersWithDetails = customersList;
+        }
+      }
+
+      // Check if first customer has CUSTOMER role (existing customer)
+      let hasExistingCustomer = false;
+      if (customersWithDetails.length > 0) {
+        const firstCustomer = customersWithDetails[0];
+        const customerRoles = firstCustomer.customerDetails?.customer?.customerRole || [];
+        hasExistingCustomer = customerRoles.some((role: any) => role.roleX === "CUSTOMER");
+      }
+
+      // Store customer data with details
       const storedData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
-      storedData.customersData = data;
+      storedData.businessDetails = formData;
+      storedData.customersData = customersWithDetails;
+      storedData.hasExistingCustomer = hasExistingCustomer;
       localStorage.setItem("merchantOnboardingData", JSON.stringify(storedData));
 
-      // Navigate to your-companies page
-      router.push("/account-onboarding/your-companies");
+      // Navigate based on whether user is an existing customer
+      if (hasExistingCustomer) {
+        // Navigate to OTP if existing customer
+        router.push("/account-onboarding/otp");
+      } else {
+        // Navigate to verification if not existing customer
+        router.push("/account-onboarding?step=verification");
+      }
     } catch (err: any) {
       console.error("Error fetching customers:", err);
       setLocalError(err.message || "Failed to fetch customer data. Please try again.");
@@ -135,14 +189,7 @@ const Page = (props: Props) => {
 
   return (
     <div className="relative">
-      {isLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="text-gray-700 font-medium">Processing your application...</p>
-          </div>
-        </div>
-      )}
+      <LoadingOverlay message="Processing your application..." isVisible={isLoading} />
 
       {(error || localError) && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">

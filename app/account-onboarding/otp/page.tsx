@@ -199,12 +199,27 @@ const OTPVerification: React.FC = () => {
         };
         localStorage.setItem("otp_verification_data", JSON.stringify(verificationData));
         
-        setOtpMessage("OTP verified successfully! Submitting pre-application...");
+        setOtpMessage("OTP verified successfully!");
         
-        // Call pre-application API
-        setTimeout(async () => {
-          await submitPreApplicationOnly();
-        }, 1000);
+        // Check if user came from customer selection with a CUSTOMER role
+        const storedData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+        const firstCustomer = storedData.customersData?.[0];
+        const hasCustomerRole = firstCustomer?.customerDetails?.customer?.customerRole?.some((role: any) => role.roleX === "CUSTOMER");
+        
+        // Navigate based on context
+        if (hasCustomerRole) {
+          // User has CUSTOMER role, submit pre-application and go to your-companies
+          router.push("/account-onboarding/your-companies");
+          // setTimeout(async () => {
+          //   await submitPreApplicationOnly();
+          //   // Navigate to your-companies after pre-application
+          // }, 1500);
+        } else {
+          // User doesn't have CUSTOMER role, just submit pre-application
+          // setTimeout(async () => {
+          //   await submitPreApplicationOnly();
+          // }, 1000);
+        }
       } else {
         setOtpMessage(getOtpMessage(responseCode || ""));
       }

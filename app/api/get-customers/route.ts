@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const nidNumber = searchParams.get("nidNumber");
+    const nidType = searchParams.get("nidType") || "01";
 
     if (!nidNumber) {
       return NextResponse.json(
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     const uuid = uuidv4();
 
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/external-partners/customers?nidNumber=${nidNumber}&startPageNumber=1&pageLimit=1`,
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/external-partners/customers?nidType=${nidType}&nidNumber=${nidNumber}&startPageNumber=1&pageLimit=1`,
       {
         method: "GET",
         headers: {

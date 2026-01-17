@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Stepper } from "@/components/dynamic/Stepper";
 import PersonalInfo from "@/components/simplyblu-application-steps/PersonalInfo";
 import CompanyInfo from "@/components/simplyblu-application-steps/CompanyInfo";
-import ProductSetup from "@/components/simplyblu-application-steps/ProductSetup";
+import ProductSetupWithSummary from "@/components/simplyblu-application-steps/ProductSetupWithSummary";
 
 
 type Props = {};
@@ -20,7 +20,7 @@ const steps = [
   },
   {
     title: "Product Setup",
-    content: <ProductSetup />,
+    content: <ProductSetupWithSummary />,
   },
   {
     title: "Accept offer",

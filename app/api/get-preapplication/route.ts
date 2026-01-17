@@ -15,18 +15,19 @@ export async function POST(request: Request): Promise<Response> {
       "X-IBM-Client-Secret": process.env.NEXT_PUBLIC_IBM_CLIENT_SECRET!,
       "x-fapi-interaction-id": uuid,
       "x-sbg-channel": process.env.NEXT_PUBLIC_SBG_CHANNEL_NAME!,
+      "Cookie": "sap-usercontext=sap-client=700",
     };
 
     console.log("Pre-application request headers:", headers);
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_PREAPPLICATION_URL}npextorg/extnonprod/business-lending-mymobiz/pre-application`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      }
-    );
+    const apiUrl = `${process.env.NEXT_PUBLIC_PREAPPLICATION_URL}npextorg/extnonprod/business-lending-mymobiz/pre-application`;
+    console.log("Pre-application API URL:", apiUrl);
+
+    const res = await fetch(apiUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
 
     const data = await res.json();
     

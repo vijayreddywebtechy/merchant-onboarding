@@ -165,6 +165,64 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
   });
 
   React.useEffect(() => {
+    // Trigger digital offer API call on component mount
+    const fetchDigitalOffer = async () => {
+      let accessToken = null;
+      const storedToken = localStorage.getItem("accessToken");
+      
+      try {
+        const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+
+      if (storedToken) {
+        headers["Authorization"] = `Bearer ${storedToken}`;
+      }
+        const merchantData = localStorage.getItem("merchantOnboardingData");
+        if (merchantData) {
+          const parsed = JSON.parse(merchantData);
+          const digitalOfferId = parsed.preApplicationResponse?.digitalOfferId;
+
+          if (digitalOfferId) {
+            console.log('Fetching digital offer for ID:', digitalOfferId);
+            const response = await fetch(`/api/digital-offer/${digitalOfferId}`, {
+              headers,
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+              console.log('Digital offer data:', data);
+              // Store the digital offer response in localStorage
+              parsed.digitalOfferResponse = data;
+              localStorage.setItem("merchantOnboardingData", JSON.stringify(parsed));
+            } else {
+              console.error('Failed to fetch digital offer:', data.error);
+            }
+
+            // Fetch application process data using the same ID
+            console.log('Fetching application process data for ID:', digitalOfferId);
+            const processResponse = await fetch(`/api/application-process-data/${digitalOfferId}`, {
+              headers,
+            });
+            const processData = await processResponse.json();
+
+            if (processResponse.ok) {
+              console.log('Application process data:', processData);
+              // Store the application process data response in localStorage
+              parsed.applicationProcessData = processData;
+              localStorage.setItem("merchantOnboardingData", JSON.stringify(parsed));
+            } else {
+              console.error('Failed to fetch application process data:', processData.error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching digital offer:', error);
+      }
+    };
+
+    fetchDigitalOffer();
+
     // Try to load saved personal details first
     const savedPersonalData = localStorage.getItem("personalDetailsFormData");
     if (savedPersonalData) {
@@ -174,36 +232,27 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
       const merchantData = localStorage.getItem("merchantOnboardingData");
       if (merchantData) {
         const parsed = JSON.parse(merchantData);
-        const businessDetails = parsed.businessDetails;
-        const companyDirectors = parsed.companyDirectors?.COMPANY_DATA?.Directors || [];
-        const companyInfo = parsed.companyInfo?.COMPANY_DATA?.Registration;
+        const customerDetails = parsed.customerDetails?.customer;
+        const director = parsed.selectedCompanyDetails?.COMPANY_DATA?.Directors?.[0];
         
-        // Find the director matching the director ID
-        const director = companyDirectors.find((dir: any) => 
-          dir.ID_NO === businessDetails?.directorId
-        );
-        
-        // Get address from company or director
-        const address = companyInfo || director || {};
-        
-        if (businessDetails) {
+        if (customerDetails?.personDetails) {
           reset({
-            fname: director?.FIRST_NAMES || "",
-            lname: director?.SURNAME || "",
-            idNo: businessDetails.directorId || "",
-            phoneNumber: businessDetails.cellphone?.replace(/^0/, "") || "",
-            email: businessDetails.email || "",
-            nationality: "ZA",
-            citizenship: "ZA",
+            fname: customerDetails.personDetails.firstName || "",
+            lname: customerDetails.personDetails.lastName || "",
+            idNo: parsed.businessDetails?.directorId || "",
+            phoneNumber: parsed.businessDetails?.cellphone?.replace(/^0/, "") || "",
+            email: parsed.businessDetails?.email || "",
+            nationality: customerDetails.personDetails.nationality || "ZA",
+            citizenship: customerDetails.personDetails.citizenshipCountry || "ZA",
             isPublicOfficial: "",
             isSouthAfricaResident: "",
-            street: address.PHYS_ADDR_1 || address.RES_ADDR_1 || "",
+            street: director?.RES_ADDR_1 || "",
             unit: "",
             buildingName: "",
-            suburb: address.PHYS_ADDR_2 || address.RES_ADDR_2 || "",
-            city: address.PHYS_ADDR_2 || address.RES_ADDR_2 || "",
-            province: businessDetails.province || address.REGION_CODE?.toLowerCase() || "",
-            postalCode: address.PHYS_CODE || address.RES_POST_CODE || "",
+            suburb: director?.RES_ADDR_2 || "",
+            city: director?.RES_ADDR_3 || "",
+            province: director?.RES_ADDR_4?.toLowerCase() || "",
+            postalCode: director?.RES_POST_CODE || "",
             addressSearch: "",
           });
         }

@@ -21,7 +21,6 @@ const COMPANY_STEPS = [
   { id: 2, name: "Marketing Consent", component: MarketingConsentForm },
   { id: 3, name: "Banking Details", component: CompanyBankingDetails },
   { id: 4, name: "Delivery Details", component: DeliveryDetails },
-  { id: 5, name: "Card Machine Summary", component: CardMachineSummary },
 ];
 
 function CompanyInfo({ onNext, onBack }: CompanyInfoProps) {

@@ -86,21 +86,6 @@ export const useOnboardingSubmit = () => {
     const selectedCompany = storedData.selectedCompany;
     const isSoleProprietor = storedData.isSoleProprietor === true;
 
-    // Province mapping to match API requirements
-    const provinceMap: Record<string, string> = {
-      "eastern-cape": "EC",
-      "free-state": "FS",
-      "gauteng": "GP",
-      "kwazulu-natal": "KZN",
-      "limpopo": "LP",
-      "mpumalanga": "MP",
-      "northern-cape": "NC",
-      "north-west": "NW",
-      "western-cape": "WC"
-    };
-
-    const provinceCode = provinceMap[formData.province.toLowerCase()] || formData.province.toUpperCase();
-
     // Get main director - try to find by ID first, otherwise use first director
     const mainDirector = companyDirectors.find((dir: any) => dir.ID_NO === formData.directorId) 
       || companyDirectors[0] 
@@ -112,16 +97,41 @@ export const useOnboardingSubmit = () => {
       : (companyInfo?.Registration?.ENT_TYPE || "SOLE PROPRIETOR");
     
     const businessName = isSoleProprietor 
-      ? formData.directorId 
-      : (companyInfo?.Registration?.ENT_NAME || selectedCompany?.name || formData.directorId);
+      ? "Business"
+      : (companyInfo?.Registration?.ENT_NAME || selectedCompany?.name || "Business");
     const businessRegNumber = isSoleProprietor 
       ? formData.directorId 
       : (companyInfo?.Registration?.ENT_NUMBER || selectedCompany?.registrationNumber || formData.directorId);
 
-    // Extract first name and last name
-    // For sole proprietor without company data, we need to extract from ID or use placeholder
-    const firstName = mainDirector.FIRST_NAMES || formData.directorId.substring(0, 5);
-    const lastName = mainDirector.SURNAME || formData.directorId;
+    // Extract first and last names from director ID (format: SURNAMEINTIALS)
+    // For sole proprietor, derive names from identification number or use defaults
+    let firstName = mainDirector.FIRST_NAMES || null;
+    let lastName = mainDirector.SURNAME || null;
+    const pipSurname = isSoleProprietor ? formData.directorId : (mainDirector.SURNAME || formData.directorId);
+    const pipName = isSoleProprietor ? "Director" : (mainDirector.FIRST_NAMES || "Director");
+    
+    // Province mapping - use short codes (EC, GP, WC, etc.) instead of full names
+    const provinceMap: Record<string, string> = {
+      "eastern-cape": "EC",
+      "ec": "EC",
+      "eastern cape": "EC",
+      "free state": "FS",
+      "fs": "FS",
+      "gauteng": "GP",
+      "gp": "GP",
+      "kwazulu-natal": "KN",
+      "kn": "KN",
+      "limpopo": "LP",
+      "lp": "LP",
+      "mpumalanga": "MP",
+      "northern cape": "NC",
+      "nc": "NC",
+      "north west": "NW",
+      "nw": "NW",
+      "western cape": "WC",
+      "wc": "WC",
+    };
+    const businessProvince = provinceMap[formData.province.toLowerCase()] || formData.province.toUpperCase().substring(0, 2);
     
     const payload = {
       productDetails: {
@@ -137,9 +147,9 @@ export const useOnboardingSubmit = () => {
           pipDetails: {
             publicOfficialRelatedDetails: {
               typeOfRelationship: null,
-              surname: lastName,
+              surname: pipSurname,
               relatedToPublicOfficial: null,
-              name: firstName,
+              name: pipName,
             },
             publicOfficial: false,
           },
@@ -164,24 +174,24 @@ export const useOnboardingSubmit = () => {
           collectShare: true,
         },
         marketingConsents: {
-          shareCustomerData: true,
+          shareCustomerData: true,  // Default to true for better user experience
           receiveMarketing: true,
           marketResearch: true,
           externalMarketing: true,
         },
       },
       businessDetails: {
-        soleShareholdingInd: isSoleProprietor,
+        soleShareholdingInd: true,  // Always true for sole proprietor onboarding
         createLead: false,
         businessType: businessType,
         businessTurnover: formData.grossTurnover,
         businessRegistrationNumber: businessRegNumber,
-        businessProvince: provinceCode,
+        businessProvince: businessProvince,
         businessName: businessName,
         businessCity: null,
       },
       applicationDetails: {
-        inflightCustomerDataId: "MyMo Biz Account",
+        inflightCustomerDataId: "MyMo Biz Account",  // Use consistent value
         bpGuid: null,
         applicationId: "a6h9M0000007909QAA",
       },
