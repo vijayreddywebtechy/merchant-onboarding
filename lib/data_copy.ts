@@ -1432,3 +1432,22 @@ export const natureOfBusinessOptions: SelectOption[] = [
   { label: "Attorneys", value: "26" },
   { label: "SBSA Subsidiaries", value: "30" },
 ];
+
+/** Sheet: Amount Range Options */
+export const amountRangeOptions: SelectOption[] = [
+  { value: "0-50000", label: "R 0 - R 50,000" },
+  { value: "50000-100000", label: "R 50,001 - R 100,000" },
+  { value: "100000-500000", label: "R 100,001 - R 500,000" },
+  { value: "500000-1000000", label: "R 500,001 - R 1,000,000" },
+  { value: "1000000+", label: "R 1,000,001+" },
+];
+
+/** Sheet: Business Funding Options */
+export const businessFundingOptions: SelectOption[] = [
+  { value: "personal-savings", label: "Personal Savings" },
+  { value: "bank-loan", label: "Bank Loan" },
+  { value: "investors", label: "Investors" },
+  { value: "grants", label: "Grants" },
+  { value: "family-friends", label: "Family and Friends" },
+  { value: "business-revenue", label: "Business Revenue" },
+];

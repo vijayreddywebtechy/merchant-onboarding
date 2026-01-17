@@ -76,25 +76,6 @@ interface CompanyDetailsSchema {
 }
 
 // Company Financial Info Schema
-export const companyFinancialInfoSchema = yup.object().shape({
-  annualTurnover: yup
-    .string()
-    .required("Annual turnover is required"),
-  monthlyProfit: yup
-    .string()
-    .required("Monthly profit is required"),
-  averageTransactionAmount: yup
-    .string()
-    .required("Average transaction amount is required"),
-  irregularIncome: yup
-    .string()
-    .required("Irregular income is required"),
-  fundingSource: yup
-    .array()
-    .of(yup.string())
-    .min(1, "Select at least one funding source")
-    .required("Select at least one funding source"),
-});
 
 // Marketing Consent Schema
 export const marketingConsentSchema = yup.object().shape({
@@ -195,6 +176,42 @@ export const deliveryDetailsSchema = yup.object().shape({
         .trim()
         .required("Postal code is required")
         .matches(/^[0-9]{4,6}$/, "Enter a valid postal code"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+});
+
+// Company Financial Info Schema
+export const companyFinancialInfoSchema = yup.object().shape({
+  annualTurnover: yup.string().required("Annual turnover is required"),
+  monthlyProfit: yup.string().required("Monthly profit is required"),
+  averageTransactionAmount: yup.string().required("Average transaction amount is required"),
+  irregularIncome: yup.string().required("Irregular income is required"),
+  fundingSource: yup.array().of(yup.string()).min(1, "Please select at least one funding source"),
+  entityClassification: yup.string().required("Entity classification is required"),
+  taxResidencyOutsideSA: yup.string().oneOf(["yes", "no"]).required("Please select tax residency option"),
+  bbeTransaction: yup.string().when("taxResidencyOutsideSA", {
+    is: (val: string) => val === "yes" || val === "no",
+    then: (schema) => schema.required("BBE transaction is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  profitFromBusiness: yup.string().when("taxResidencyOutsideSA", {
+    is: (val: string) => val === "yes" || val === "no",
+    then: (schema) => schema.required("Profit from business is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  countryOfTaxResidency: yup.string().when("taxResidencyOutsideSA", {
+    is: "yes",
+    then: (schema) => schema.required("Country of tax residency is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  foreignTaxNumber: yup.string().when("taxResidencyOutsideSA", {
+    is: "yes",
+    then: (schema) => schema.required("Foreign tax number is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  reasonForNoTaxNumber: yup.string().when(["taxResidencyOutsideSA", "foreignTaxNumber"], {
+    is: (taxResidency: string, taxNumber: string) => taxResidency === "yes" && !taxNumber,
+    then: (schema) => schema.required("Reason for not having tax number is required"),
     otherwise: (schema) => schema.notRequired(),
   }),
 });
