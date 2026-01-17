@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import CustomSelect from "@/components/dynamic/CustomSelect";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bankingDetailsSchema } from "@/lib/validationSchemas";
+import { merchantCommissionRates } from "@/lib/data";
 
 type BankingDetailsData = {
   estimatedTurnover: string;
@@ -99,6 +100,13 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
       return isValid;
     };
   }, [handleSubmit]);
+
+  const estimatedTurnoverValue = watch("estimatedTurnover");
+
+  const commissionRates = useMemo(() => {
+    const isHighTurnover = Number(estimatedTurnoverValue) > 200_000;
+    return isHighTurnover ? merchantCommissionRates.highTurnover : merchantCommissionRates.lowTurnover;
+  }, [estimatedTurnoverValue]);
 
   return (
     <div className="py-6 md:py-8">
@@ -296,19 +304,19 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                   <span className="text-sm text-gray-700">
                     Debit card transaction costs
                   </span>
-                  <span className="text-sm text-gray-900">0.5%</span>
+                  <span className="text-sm text-gray-900">{commissionRates.nonSb.dr}%</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-200">
                   <span className="text-sm text-gray-700">
                     Credit card transaction costs
                   </span>
-                  <span className="text-sm text-gray-900">1.84%</span>
+                  <span className="text-sm text-gray-900">{commissionRates.nonSb.cr}%</span>
                 </div>
                 <div className="flex justify-between items-center py-2">
                   <span className="text-sm text-gray-700">
                     International transaction costs
                   </span>
-                  <span className="text-sm text-gray-900">3.00%</span>
+                  <span className="text-sm text-gray-900">{commissionRates.nonSb.fr}%</span>
                 </div>
               </div>
             </div>
@@ -329,45 +337,45 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                     <span className="text-sm text-gray-700">
                       Debit card transaction costs
                     </span>
-                    <span className="text-sm text-gray-900">0.5%</span>
+                    <span className="text-sm text-gray-900">{commissionRates.sb.dr}%</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-gray-200">
                     <span className="text-sm text-gray-700">
                       Credit card transaction costs
                     </span>
-                    <span className="text-sm text-gray-900">1.4%</span>
+                    <span className="text-sm text-gray-900">{commissionRates.sb.cr}%</span>
                   </div>
                   <div className="flex justify-between items-center py-2">
                     <span className="text-sm text-gray-700">
                       International transaction costs
                     </span>
-                    <span className="text-sm text-gray-900">1.00%</span>
+                    <span className="text-sm text-gray-900">{commissionRates.sb.fr}%</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-          <div className="flex flex-col md:flex-row gap-3 !mt-12">
-            {onBack && (
-              <Button variant="outline" className="w-full md:max-w-40" onClick={onBack} type="button">
-                Back
-              </Button>
-            )}
-            <Button 
-              className="w-full md:max-w-40 ml-auto" 
-              onClick={async () => {
-                const isValid = await (window as any).__bankingDetailsValidate?.();
-                if (isValid && onNext) {
-                  const data = localStorage.getItem("companyBankingDetailsFormData");
-                  if (data) await onNext(JSON.parse(data));
-                }
-              }}
-              type="button"
-            >
-              Next
+        <div className="flex flex-col md:flex-row gap-3 !mt-12">
+          {onBack && (
+            <Button variant="outline" className="w-full md:max-w-40" onClick={onBack} type="button">
+              Back
             </Button>
-          </div>
+          )}
+          <Button
+            className="w-full md:max-w-40 ml-auto"
+            onClick={async () => {
+              const isValid = await (window as any).__bankingDetailsValidate?.();
+              if (isValid && onNext) {
+                const data = localStorage.getItem("companyBankingDetailsFormData");
+                if (data) await onNext(JSON.parse(data));
+              }
+            }}
+            type="button"
+          >
+            Next
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -1705,3 +1705,15 @@ export const natureOfBusinessOptions: SelectOption[] = [
   { label: "Attorneys", value: "26" },
   { label: "SBSA Subsidiaries", value: "30" },
 ];
+
+
+export const merchantCommissionRates = {
+  lowTurnover: {
+    sb: { dr: 1.00, cr: 1.99, fr: 3.15 },
+    nonSb: { dr: 2.50, cr: 2.50, fr: 3.15 }
+  },
+  highTurnover: {
+    sb: { dr: 0.85, cr: 1.84, fr: 3.00 },
+    nonSb: { dr: 2.35, cr: 2.35, fr: 3.00 },
+  }
+}
