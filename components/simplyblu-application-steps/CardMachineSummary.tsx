@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import Image from "next/image";
@@ -29,12 +30,23 @@ type CardMachineSummaryData = {
 
 interface ProductSetupData {
   tradingName: string;
-  purchaseType: "buy" | "rent";
-  proMachineCount: string;
-  pocketMachineCount: string;
-  proSelected: boolean;
-  pocketSelected: boolean;
-  estimatedTurnover: string;
+  businessEmail: string;
+  
+  // Merchant App
+  merchantAppEnabled: boolean;
+
+  // Takealot Flow
+  takealotPocketSelected?: boolean;
+  takealotLiteSelected?: boolean;
+  selectedMachine?: "pocket" | "lite" | ""; 
+
+  // Rent/Buy Flow
+  purchaseType?: "buy" | "rent";
+  proMachineCount?: string;
+  pocketMachineCount?: string;
+  proSelected?: boolean;
+  pocketSelected?: boolean;
+  estimatedTurnover?: string;
 }
 
 interface Props {
@@ -42,18 +54,26 @@ interface Props {
   onBack?: () => void;
 }
 
-// Pricing configuration
-const pricingConfig = {
+// Pricing configurations matching ProductSetup
+const rentBuyPricing = {
   rent: {
     proDeviceFee: 399,
     pocketDeviceFee: 399,
     connectivityFee: 0,
+    maxDevices: 4
   },
   buy: {
     proDeviceFee: 1999,
     pocketDeviceFee: 1999,
     connectivityFee: 40,
+    maxDevices: 2
   }
+};
+
+const takealotPricing = {
+  pocketDeviceFee: 40,
+  liteDeviceFee: 40,
+  connectivityFee: 40,
 };
 
 // Industry classification mapping (ISIC4 codes)
@@ -129,6 +149,7 @@ const industryClassificationMap: { [key: string]: string } = {
 };
 
 export default function CardMachineSummary({ onNext, onBack }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [isLoadingDocument, setIsLoadingDocument] = useState(false);
@@ -136,6 +157,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [productData, setProductData] = useState<ProductSetupData | null>(null);
+  const [flowType, setFlowType] = useState<"merchant-app" | "takealot" | "rent">("rent");
 
   const { mutate: createContract } = useCustomMutation({
     url: `/api/create-contract`,
@@ -157,6 +179,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
     handleSubmit,
     watch,
     reset,
+    setValue,
   } = useForm<CardMachineSummaryData>({
     resolver: yupResolver(cardMachineSummarySchema) as any,
     mode: "onChange",
@@ -168,11 +191,28 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
     },
   });
 
-  // Load product setup data from localStorage
+  // Load product setup data from localStorage and determine flow type
   useEffect(() => {
     const savedProductData = localStorage.getItem("productSetupData");
+    const savedMerchantData = localStorage.getItem("merchantOnboardingData");
+    
     if (savedProductData) {
       setProductData(JSON.parse(savedProductData));
+    }
+    
+    if (savedMerchantData) {
+      try {
+        const parsed = JSON.parse(savedMerchantData);
+        if (parsed.selectedOption === "merchant-app") {
+          setFlowType("merchant-app");
+        } else if (parsed.selectedOption === "takealot") {
+          setFlowType("takealot");
+        } else {
+          setFlowType("rent");
+        }
+      } catch (e) {
+        setFlowType("rent");
+      }
     }
   }, []);
 
@@ -185,9 +225,30 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
 
   const calculateTotal = () => {
     if (!productData) return 0;
-    const pricing = productData.purchaseType ? pricingConfig[productData.purchaseType] : pricingConfig.rent;
-    const proCount = productData.proSelected ? parseInt(productData.proMachineCount) || 0 : 0;
-    const pocketCount = productData.pocketSelected ? parseInt(productData.pocketMachineCount) || 0 : 0;
+    
+    if (flowType === "merchant-app") return 0;
+
+    if (flowType === "takealot") {
+      let total = 0;
+      if (productData.takealotPocketSelected) total += takealotPricing.pocketDeviceFee;
+      if (productData.takealotLiteSelected) total += takealotPricing.liteDeviceFee;
+       // Backward compatibility if using old selectedMachine
+      if (productData.selectedMachine && !productData.takealotPocketSelected && !productData.takealotLiteSelected) {
+          if (productData.selectedMachine === "pocket") total += takealotPricing.pocketDeviceFee;
+          if (productData.selectedMachine === "lite") total += takealotPricing.liteDeviceFee;
+      }
+      
+      const machineCount = (productData.takealotPocketSelected ? 1 : 0) + (productData.takealotLiteSelected ? 1 : 0) || (productData.selectedMachine ? 1 : 0);
+      return total + (machineCount * takealotPricing.connectivityFee);
+    }
+
+    // Rent/Buy Flow
+    const pricing = productData.purchaseType && rentBuyPricing[productData.purchaseType] 
+                    ? rentBuyPricing[productData.purchaseType] 
+                    : rentBuyPricing.rent;
+
+    const proCount = productData.proSelected ? parseInt(productData.proMachineCount || "0") : 0;
+    const pocketCount = productData.pocketSelected ? parseInt(productData.pocketMachineCount || "0") : 0;
     
     const proDeviceFee = proCount * pricing.proDeviceFee;
     const pocketDeviceFee = pocketCount * pricing.pocketDeviceFee;
@@ -195,6 +256,26 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
     const connectivityFee = totalMachines * pricing.connectivityFee;
     
     return proDeviceFee + pocketDeviceFee + connectivityFee;
+  };
+  
+  const selectedMachinesList = () => {
+      const items = [];
+      if (flowType === "takealot") {
+          if (productData?.takealotPocketSelected) items.push({ type: "pocket", name: "SimplyBLU Pocket", count: 1 });
+          if (productData?.takealotLiteSelected) items.push({ type: "lite", name: "SimplyBLU Lite", count: 1 });
+          // Fallback
+          if (items.length === 0 && productData?.selectedMachine) {
+               items.push({ 
+                   type: productData.selectedMachine, 
+                   name: productData.selectedMachine === "pocket" ? "SimplyBLU Pocket" : "SimplyBLU Lite", 
+                   count: 1 
+               });
+          }
+      } else if (flowType === "rent") {
+          if (productData?.proSelected) items.push({ type: "pro", name: "SimplyBLU Pro", count: parseInt(productData.proMachineCount || "0") });
+          if (productData?.pocketSelected) items.push({ type: "pocket", name: "SimplyBLU Pocket", count: parseInt(productData.pocketMachineCount || "0") });
+      }
+      return items;
   };
 
   // Save form data in real-time to localStorage
@@ -212,9 +293,9 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
     try {
       // Get preapplication data for document retrieval
       const preApplicationResponse = JSON.parse(
-        localStorage.getItem("preApplicationResponse") || "{}"
+        localStorage.getItem("merchantOnboardingData") || "{}"
       );
-      const businessBPGUID = preApplicationResponse.businessBPGUID;
+      const businessBPGUID = preApplicationResponse.preApplicationResponse.businessBPGUID;
       const contractDocumentId = preApplicationResponse.contractDocumentId;
 
       if (!businessBPGUID) {
@@ -299,23 +380,20 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
     setIsSigning(true);
     
     try {
-      // Mark contract as signed
-      localStorage.setItem("contractSigned", "true");
-      localStorage.setItem("contractSignedTimestamp", new Date().toISOString());
+      // Set a flag to indicate that contract signing is pending OTP verification
+      localStorage.setItem("contractPendingSign", "true");
       
-      console.log("Contract signed successfully");
+      console.log("Redirecting to OTP verification for contract signing...");
       
       setIsSigning(false);
       setOpen(false);
       
-      // Proceed to next step
-      if (onNext) {
-        onNext();
-      }
+      // Redirect to OTP verification page for contract signing
+      router.push("/account-onboarding/contract-signing-otp");
     } catch (error: any) {
-      console.error("Error signing contract:", error);
+      console.error("Error initiating contract signing:", error);
       setIsSigning(false);
-      alert(error.message || "Error signing contract. Please try again.");
+      alert(error.message || "Error initiating contract signing. Please try again.");
     }
   };
 
@@ -357,88 +435,104 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
 
       console.log("=== DATA FROM LOCALSTORAGE ===");
       console.log("productData:", productData);
-      console.log("companyData:", companyData);
-      console.log("deliveryData:", deliveryData);
-      console.log("bankingData:", bankingData);
-      console.log("personalData:", personalData);
-      console.log("preApplicationResponse:", preApplicationResponse);
-      console.log("================================");
-      console.log("Preparing digital offer submission...");
-
-      // Calculate pricing
-      const purchaseType: "buy" | "rent" = (productData.purchaseType === "buy" || productData.purchaseType === "rent") 
-        ? productData.purchaseType 
-        : "rent";
-      const pricing = pricingConfig[purchaseType];
-      const proCount = productData.proSelected ? parseInt(productData.proMachineCount) || 0 : 0;
-      const pocketCount = productData.pocketSelected ? parseInt(productData.pocketMachineCount) || 0 : 0;
-      const totalMachines = proCount + pocketCount;
-      const isBuy = productData.purchaseType === "buy";
+      console.log("flowType:", flowType);
       
-      // Calculate device purchase price
-      const devicePurchasePrice = isBuy ? pricing.proDeviceFee : 0;
-      
-      // Build pricing conditions - empty array for now as per working payload
+      // Build pricing conditions - empty array for now
       const pricCond: any[] = [];
       setOpen(true);
 
-      // Build device entry
-      const deviceEntry: any = {
-        nbrOfDevices: totalMachines,
-        deviceModel: "Business to provide model",
-      };
+      // Build items array based on selection
+      const items = [];
+      const machines = [];
+      
+      if (flowType === "takealot") {
+          if (productData.takealotPocketSelected) machines.push({ model: "SimplyBLU Pocket", qty: 1 });
+          if (productData.takealotLiteSelected) machines.push({ model: "SimplyBLU Lite", qty: 1 });
+          // Fallback
+          if (machines.length === 0 && productData.selectedMachine) {
+              machines.push({ 
+                  model: productData.selectedMachine === "pocket" ? "SimplyBLU Pocket" : "SimplyBLU Lite", 
+                  qty: 1 
+              });
+          }
+      } else if (flowType === "rent") {
+          if (productData.proSelected) machines.push({ model: "SimplyBLU Pro", qty: parseInt(productData.proMachineCount || "0") });
+          if (productData.pocketSelected) machines.push({ model: "SimplyBLU Pocket", qty: parseInt(productData.pocketMachineCount || "0") });
+      }
 
-      // Prepare installation address
       const deviceReqdDate = deliveryData.deliveryDate 
         ? String(deliveryData.deliveryDate).split('T')[0] 
         : new Date().toISOString().split('T')[0];
-
-      // Map industry classification to ISIC4 code
-      console.log("companyData.industryClassification:", companyData.industryClassification);
       const merchantIndustryCode = industryClassificationMap[companyData.industryClassification] || companyData.industryClassification || "74120";
-      console.log("merchantIndustryCode:", merchantIndustryCode);
-      console.log("Is code in map?", !!industryClassificationMap[companyData.industryClassification]);
 
-      // Build the digital offer payload matching the working example
-      const digitalOfferPayload = {
-        offerId: offerId,
-        items: [
-          {
+      // Common prod details
+      const commonProdDetails = {
+            tradingName: productData.tradingName || "",
+            serviceDescription: "A compact POS device",
+            rentOrBuy: productData.purchaseType ? (productData.purchaseType === "buy" ? "B" : "R") : "R",
+            registrationEmailAddr: personalData.email || companyData.email || "",
+            merchantIndustry: merchantIndustryCode, 
+            instalCountydistrict: deliveryData.suburb || companyData.suburb || "To be confirmed",
+            instalCountrycode: "ZA",
+            deviceReqdDate: deviceReqdDate,
+            contactTelephoneNbr: deliveryData.contactPersonNumber || personalData.phoneNumber || "",
+            contactName: `${deliveryData.contactPersonName || ""} ${deliveryData.contactPersonSurname || ""}`.trim() || `${personalData.fname || ""} ${personalData.lname || ""}`.trim() || "",
+            cashback: "N",
+            businessMobileNbr: personalData.phoneNumber || "",
+            businessEmailAddr: personalData.email || companyData.email || "",
+            billingCycle: "D",
+            bankingPorIbt: bankingData.branchCode || "",
+            bankingBankName: bankingData.branchCode ? `000${String(bankingData.branchCode).trim()}` : "",
+            bankingBank: "confirm mapping",
+            bankingAccNo: (bankingData.accountNumber || "").trim(),
+            bankingAccHolderName: bankingData.accountHolderName || "",
+            allowRefunds: "N",
+            accountNbr: "",
+            acceptRCSNum: "true",
+            acceptDinersNum: "true",
+            acceptAmExpressNum: "true"
+      };
+
+      // Create an item for each machine type (if the API supports multiple items)
+      // Alternatively, if API expects one 'merchantSolution' with multiple 'device' entries:
+      const deviceEntries = machines.map(m => ({
+          nbrOfDevices: m.qty,
+          deviceModel: m.model
+      }));
+      
+      if (deviceEntries.length > 0) {
+           items.push({
             merchantSolution: {
               prodDetails: {
-                tradingName: productData.tradingName || "",
-                serviceDescription: "A compact POS device",
-                rentOrBuy: isBuy ? "B" : "R",
-                registrationEmailAddr: personalData.email || companyData.email || "",
-                numberOfDevices: String(totalMachines),
-                merchantIndustry: merchantIndustryCode,
-                instalCountydistrict: deliveryData.suburb || companyData.suburb || "To be confirmed",
-                instalCountrycode: "ZA",
-                deviceReqdDate: deviceReqdDate,
-                contactTelephoneNbr: deliveryData.contactPersonNumber || personalData.phoneNumber || "",
-                contactName: `${deliveryData.contactPersonName || ""} ${deliveryData.contactPersonSurname || ""}`.trim() || `${personalData.fname || ""} ${personalData.lname || ""}`.trim() || "",
-                cashback: "N",
-                businessMobileNbr: personalData.phoneNumber || "",
-                businessEmailAddr: personalData.email || companyData.email || "",
-                billingCycle: "D",
-                bankingPorIbt: bankingData.branchCode || "",
-                bankingBankName: bankingData.branchCode ? `000${String(bankingData.branchCode).trim()}` : "",
-                bankingBank: "confirm mapping",
-                bankingAccNo: (bankingData.accountNumber || "").trim(),
-                bankingAccHolderName: bankingData.accountHolderName || "",
-                allowRefunds: "N",
-                accountNbr: "",
-                acceptRCSNum: "true",
-                acceptDinersNum: "true",
-                acceptAmExpressNum: "true"
+                  ...commonProdDetails,
+                  numberOfDevices: String(machines.reduce((acc, curr) => acc + curr.qty, 0)), // Total count
               },
               pricCond: pricCond,
-              device: [deviceEntry],
+              device: deviceEntries, // Pass array of devices
+              acceptFlag: true
+            },
+            itemID: preApplicationResponse.itemNo || preApplicationResponse.itemID || "0100" // Use same ID for main solution?
+           });
+           items.push(null); // The null second item requirement
+      } else {
+             items.push({
+            merchantSolution: {
+              prodDetails: {
+                  ...commonProdDetails,
+                  numberOfDevices: "0",
+              },
+              pricCond: pricCond,
+              device: [],
               acceptFlag: true
             },
             itemID: preApplicationResponse.itemNo || preApplicationResponse.itemID || "0100"
-          }
-        ]
+           });
+           items.push(null);
+      }
+
+      const digitalOfferPayload = {
+        offerId: offerId,
+        items: items
       };
 
       console.log("Digital Offer Payload:", digitalOfferPayload);
@@ -460,11 +554,8 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
               
               const errorData = error.response?.data;
               let errorMessage = "Failed to submit digital offer. Please try again.";
-              
               if (errorData?.detail) {
                 errorMessage = errorData.detail;
-                
-                // Check if offer is not in draft status
                 if (errorMessage.includes("not in draft status")) {
                   errorMessage = "This offer has already been processed and cannot be modified.";
                 }
@@ -473,7 +564,6 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
               } else if (error.message) {
                 errorMessage = error.message;
               }
-              
               reject(new Error(errorMessage));
             },
           }
@@ -482,7 +572,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
 
       console.log("Digital offer submitted, now creating contract...");
 
-      // STEP 2: Create contract AFTER digital offer succeeds
+      // STEP 2: Create contract
       await new Promise<void>((resolve, reject) => {
         createContract(
           {
@@ -512,22 +602,16 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
           {
             onSuccess: (res) => {
               console.log("Contract created successfully:", res);
-              
-              // Store contract document ID if available
               const contractDoc = res.contracts?.find(
                 (doc: any) => doc.documentCode === "SHAREHOLDCT"
               );
-              
               if (contractDoc?.documentId) {
-                console.log("Contract Document ID:", contractDoc.documentId);
-                // Update preApplicationResponse with contract document ID
                 const updatedResponse = {
                   ...preApplicationResponse,
                   contractDocumentId: contractDoc.documentId
                 };
-                localStorage.setItem("preApplicationResponse", JSON.stringify(updatedResponse));
+                localStorage.setItem("merchantOnboardingData", JSON.stringify(updatedResponse));
               }
-              
               resolve();
             },
             onError: (error) => {
@@ -539,10 +623,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
       });
 
       console.log("Contract created successfully");
-      
       setIsSubmittingOffer(false);
-      
-      // STEP 3: Open dialog to show contract
       setOpen(true);
     } catch (error: any) {
       console.error("Error in handleConfirm:", error);
@@ -575,170 +656,122 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
               <span className="ml-2 font-medium text-gray-900">{productData?.tradingName || "Not set"}</span>
             </div>
             <div>
-              <span className="text-gray-600">Estimated Turnover:</span>
-              <span className="ml-2 font-medium text-gray-900">
-                R {productData?.estimatedTurnover ? parseFloat(productData.estimatedTurnover).toLocaleString() : "0"}
-              </span>
+              <span className="text-gray-600">Business Email:</span>
+              <span className="ml-2 font-medium text-gray-900">{productData?.businessEmail || "Not set"}</span>
             </div>
             <div>
-              <span className="text-gray-600">Purchase Type:</span>
-              <span className="ml-2 font-medium text-gray-900 capitalize">{productData?.purchaseType || "N/A"}</span>
+              <span className="text-gray-600">Selected Machines:</span>
+              <div className="ml-2 inline-block align-top">
+                 {selectedMachinesList().map((m, i) => (
+                     <div key={i} className="font-medium text-gray-900">
+                         {m.name} (x{m.count})
+                     </div>
+                 ))}
+                 {selectedMachinesList().length === 0 && <span className="font-medium text-gray-900">None</span>}
+              </div>
             </div>
             <div>
-              <span className="text-gray-600">Total Monthly Fee:</span>
+              <span className="text-gray-600">Total {productData?.purchaseType === "buy" ? "" : "Monthly"} Fee:</span>
               <span className="ml-2 font-medium text-gray-900">R {calculateTotal().toFixed(2)} (excl. VAT)</span>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* SimplyBLU Pro Card Machine - Only show if selected */}
-          {productData?.proSelected && (
-            <div className="border border-gray-200 rounded-2xl overflow-hidden">
-              {/* Card Machine Image */}
-              <div>
-                <div className="h-14 bg-gradient-to-tr from-blue-900 to-blue-600 relative">
-                  <span className="absolute bg-gradient-to-tr from-primary to-blue-600 text-white px-4 py-1 rounded-br-2xl text-xs">
-                    {productData.purchaseType === "rent" ? "RENTAL - INCLUDES INSTALLATION" : "PURCHASE - INCLUDES INSTALLATION"}
-                  </span>
-                </div>
-                <div className="bg-primary-dark flex justify-center p-2">
-                  <Image
-                    src={cardMachineMd}
-                    alt="SimplyBLU Pro"
-                    width={386}
-                    height={360}
-                  />
-                </div>
-              </div>
+          {/* Selected Card Machine Display Loop */}
+          {selectedMachinesList().map((machine, index) => {
+              // Determine pricing for this machine type
+              let deviceFee = 0;
+              let connectivityFee = 0;
+              let label = "Monthly rental fee";
+              if (flowType === "takealot") {
+                  deviceFee = machine.type === "pocket" ? takealotPricing.pocketDeviceFee : takealotPricing.liteDeviceFee;
+                  connectivityFee = takealotPricing.connectivityFee;
+                  label = "Monthly connectivity fee";
+              } else {
+                  // Rent/Buy
+                  const pricing = productData?.purchaseType && rentBuyPricing[productData.purchaseType] 
+                    ? rentBuyPricing[productData.purchaseType] 
+                    : rentBuyPricing.rent;
+                  deviceFee = machine.type === "pro" ? pricing.proDeviceFee : pricing.pocketDeviceFee;
+                  connectivityFee = pricing.connectivityFee;
+                  label = productData?.purchaseType === "buy" ? "Purchase price" : "Monthly rental fee";
+              }
 
-              {/* Machine Name */}
-              <div className="p-6">
-                <h2 className="text-2xl font-medium text-gray-900">
-                  SimplyBLU Pro
-                </h2>
-              </div>
-
-              {/* Pricing Card */}
-              <div className="bg-gray-100 rounded-lg p-6 space-y-6">
-                {/* Quantity */}
-                <div>
-                  <div className="text-5xl font-medium text-gray-900 mb-2">
-                    {productData.proMachineCount}
+              return (
+                <div key={`${machine.type}-${index}`} className="border border-gray-200 rounded-2xl overflow-hidden mb-8 lg:mb-0">
+                  {/* Card Machine Image */}
+                  <div>
+                    <div className="h-14 bg-gradient-to-tr from-blue-900 to-blue-600 relative">
+                      <span className="absolute bg-gradient-to-tr from-primary to-blue-600 text-white px-4 py-1 rounded-br-2xl text-xs uppercase" >
+                        {(flowType === "rent" && productData?.purchaseType === "buy") ? "PURCHASE" : "RENTAL - INCLUDES ACTIVATION"}
+                      </span>
+                    </div>
+                    <div className="bg-primary-dark flex justify-center p-2">
+                      <Image
+                        src={machine.type === "pocket" ? pocketCardMachine : (machine.type === "lite" ? cardMachineMd : cardMachineMd)}
+                        alt={machine.name}
+                        width={300} 
+                        height={280}
+                        className="object-contain max-h-[250px]"
+                      />
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-600 uppercase tracking-wide">
-                    Number of card
-                    <br />
-                    machine(s)
-                  </p>
-                </div>
 
-                {/* Monthly Rental Fee */}
-                <div>
-                  <div className="flex items-start gap-1">
-                    <span className="text-xl text-gray-900">R</span>
-                    <span className="text-4xl font-medium text-gray-900">
-                      {(parseInt(productData.proMachineCount) * (productData.purchaseType === "buy" ? pricingConfig.buy.proDeviceFee : pricingConfig.rent.proDeviceFee)).toFixed(2)}
-                    </span>
+                  {/* Machine Name */}
+                  <div className="p-6">
+                    <h2 className="text-2xl font-medium text-gray-900">
+                      {machine.name}
+                    </h2>
                   </div>
-                  <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
-                    Total {productData.purchaseType === "buy" ? "purchase" : "monthly rental"} fee
-                    <br />
-                    (excl. VAT)
-                  </p>
-                </div>
 
-                {/* Connectivity Fee */}
-                <div className="pt-4 border-t border-gray-300">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-xl text-gray-900">R</span>
-                    <span className="text-4xl font-medium text-gray-900">
-                      {(parseInt(productData.proMachineCount) * (productData.purchaseType === "buy" ? pricingConfig.buy.connectivityFee : 0)).toFixed(2)}
-                    </span>
+                  {/* Pricing Card */}
+                  <div className="bg-gray-100 rounded-lg p-6 space-y-6">
+                    {/* Quantity */}
+                    <div>
+                      <div className="text-5xl font-medium text-gray-900 mb-2">
+                        {machine.count}
+                      </div>
+                      <p className="text-xs text-gray-600 uppercase tracking-wide">
+                        Number of card
+                        <br />
+                        machine(s)
+                      </p>
+                    </div>
+
+                    {/* Device Fee */}
+                    <div>
+                      <div className="flex items-start gap-1">
+                        <span className="text-xl text-gray-900">R</span>
+                        <span className="text-4xl font-medium text-gray-900">
+                          {(deviceFee * machine.count).toFixed(2)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
+                        {label}
+                        <br />
+                        (excl. VAT)
+                      </p>
+                    </div>
+
+                    {/* Connectivity Fee */}
+                    <div className="pt-4 border-t border-gray-300">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl text-gray-900">R</span>
+                        <span className="text-4xl font-medium text-gray-900">
+                          {(connectivityFee * machine.count).toFixed(2)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
+                         Total monthly connectivity fee
+                        <br />
+                        (excl. VAT)
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
-                    Total monthly connectivity fee
-                    <br />
-                    (excl. VAT)
-                  </p>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* SimplyBLU Pocket Card Machine - Only show if selected */}
-          {productData?.pocketSelected && (
-            <div className="border border-gray-200 rounded-2xl overflow-hidden">
-              {/* Card Machine Image */}
-              <div>
-                <div className="h-14 bg-gradient-to-tr from-blue-900 to-blue-600 relative">
-                  <span className="absolute bg-gradient-to-tr from-primary to-blue-600 text-white px-4 py-1 rounded-br-2xl text-xs">
-                    {productData.purchaseType === "rent" ? "RENTAL - INCLUDES INSTALLATION" : "PURCHASE - INCLUDES INSTALLATION"}
-                  </span>
-                </div>
-                <div className="bg-primary-dark flex justify-center p-2">
-                  <Image
-                    src={pocketCardMachine}
-                    alt="SimplyBLU Pocket"
-                    width={386}
-                    height={360}
-                  />
-                </div>
-              </div>
-
-              {/* Machine Name */}
-              <div className="p-6">
-                <h2 className="text-2xl font-medium text-gray-900">
-                  SimplyBLU Pocket
-                </h2>
-              </div>
-
-              {/* Pricing Card */}
-              <div className="bg-gray-100 rounded-lg p-6 space-y-6">
-                {/* Quantity */}
-                <div>
-                  <div className="text-5xl font-medium text-gray-900 mb-2">
-                    {productData.pocketMachineCount}
-                  </div>
-                  <p className="text-xs text-gray-600 uppercase tracking-wide">
-                    Number of card
-                    <br />
-                    machine(s)
-                  </p>
-                </div>
-
-                {/* Monthly Rental Fee */}
-                <div>
-                  <div className="flex items-start gap-1">
-                    <span className="text-xl text-gray-900">R</span>
-                    <span className="text-4xl font-medium text-gray-900">
-                      {(parseInt(productData.pocketMachineCount) * (productData.purchaseType === "buy" ? pricingConfig.buy.pocketDeviceFee : pricingConfig.rent.pocketDeviceFee)).toFixed(2)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
-                    Total {productData.purchaseType === "buy" ? "purchase" : "monthly rental"} fee
-                    <br />
-                    (excl. VAT)
-                  </p>
-                </div>
-
-                {/* Connectivity Fee */}
-                <div className="pt-4 border-t border-gray-300">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-xl text-gray-900">R</span>
-                    <span className="text-4xl font-medium text-gray-900">
-                      {(parseInt(productData.pocketMachineCount) * (productData.purchaseType === "buy" ? pricingConfig.buy.connectivityFee : 0)).toFixed(2)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 uppercase tracking-wide mt-1">
-                    Total monthly connectivity fee
-                    <br />
-                    (excl. VAT)
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+              );
+          })}
 
           {/* Merchant App - Always show */}
           <div className="border border-gray-200 rounded-2xl overflow-hidden">

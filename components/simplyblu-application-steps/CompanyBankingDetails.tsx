@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import CustomSelect from "@/components/dynamic/CustomSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Info } from "lucide-react";
+import { Info, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bankingDetailsSchema } from "@/lib/validationSchemas";
 import { merchantCommissionRates, bankNamesOptions, getBranchesForBank } from "@/lib/data";
@@ -19,6 +19,7 @@ type BankingDetailsData = {
   accountNumber: string;
   branchName: string;
   branchCode: string;
+  selectedStandardBankAccount?: string; // For Standard Bank linked accounts
 };
 
 interface CompanyBankingDetailsProps {
@@ -26,14 +27,54 @@ interface CompanyBankingDetailsProps {
   onBack?: () => void;
 }
 
-// Account type options
-const accountTypeOptions = [
+// Valid Standard Bank product codes for cheque accounts
+const VALID_SB_PRODUCT_CODES = ["4477", "69", "4478", "161", "4648", "200", "9258", "100", "129"];
+
+// Product code to label mapping
+const SB_PRODUCT_LABELS: Record<string, string> = {
+  "4477": "Bizlaunch",
+  "69": "BusinessLink Current Account",
+  "4478": "Business Current Account",
+  "161": "Legacy Business Current Account",
+  "4648": "MYMoBiz Current Account",
+  "200": "Personal Current Account",
+  "9258": "Puresave",
+  "100": "Save Business",
+  "129": "Shari'ah Business Current Account",
+};
+
+// Account type options - will be filtered based on sole proprietor status
+const allAccountTypeOptions = [
   { value: "Business Cheque Account", label: "Business Cheque Account" },
   { value: "Personal Cheque Account", label: "Personal Cheque Account" },
 ];
 
+// Verification status type
+type VerificationStatus = "idle" | "verifying" | "success" | "error";
+
+// Standard Bank account type from API
+interface StandardBankAccount {
+  bankCtry: string;
+  bankCtryiso: string;
+  bankKey: string;
+  bankAcct: string;
+  ctrlKey: string;
+  systemId: string;
+  productId: string;
+  credDebt: string;
+  productDesc: string;
+}
+
 const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) => {
   const formRef = React.useRef<HTMLFormElement>(null);
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>("idle");
+  const [verificationMessage, setVerificationMessage] = useState<string>("");
+  
+  // New state for Standard Bank accounts
+  const [standardBankAccounts, setStandardBankAccounts] = useState<StandardBankAccount[]>([]);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+  const [hasStandardBankAccount, setHasStandardBankAccount] = useState<boolean | null>(null);
+  const [isSoleProprietor, setIsSoleProprietor] = useState(false);
 
   const {
     register,
@@ -54,8 +95,158 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
       accountNumber: "",
       branchName: "",
       branchCode: "",
+      selectedStandardBankAccount: "",
     },
   });
+
+  // Fetch Standard Bank accounts on load
+  useEffect(() => {
+    const fetchStandardBankAccounts = async () => {
+      setIsLoadingAccounts(true);
+      
+      // ========================================
+      // MOCK DATA FLAG - Set to true for testing
+      // Set to false to use real API
+      // ========================================
+      const USE_MOCK_DATA = true;
+      
+      if (USE_MOCK_DATA) {
+        console.log("Using MOCK Standard Bank accounts data");
+        
+        // Mock Standard Bank accounts for testing
+        const mockAccounts: StandardBankAccount[] = [
+          {
+            bankCtry: "ZA",
+            bankCtryiso: "ZA",
+            bankKey: "051001",
+            bankAcct: "0000010008003236",
+            ctrlKey: "00",
+            systemId: "999",
+            productId: "4477",
+            credDebt: "B",
+            productDesc: "Bizlaunch"
+          },
+          {
+            bankCtry: "ZA",
+            bankCtryiso: "ZA",
+            bankKey: "051001",
+            bankAcct: "0000062504789123",
+            ctrlKey: "00",
+            systemId: "999",
+            productId: "4648",
+            credDebt: "B",
+            productDesc: "MYMoBiz Current Account"
+          },
+          {
+            bankCtry: "ZA",
+            bankCtryiso: "ZA",
+            bankKey: "051001",
+            bankAcct: "0000010006781916",
+            ctrlKey: "00",
+            systemId: "999",
+            productId: "4478",
+            credDebt: "B",
+            productDesc: "Business Current Account"
+          }
+        ];
+        
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        setStandardBankAccounts(mockAccounts);
+        setHasStandardBankAccount(true);
+        setIsSoleProprietor(false);
+        setIsLoadingAccounts(false);
+        return;
+      }
+      // ========================================
+      // END MOCK DATA
+      // ========================================
+      
+      try {
+        const merchantData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+        const preAppResponse = merchantData.preApplicationResponse;
+        const offerId = preAppResponse?.digitalOfferId;
+        
+        // Determine if sole proprietor
+        const isSoleProp = merchantData.isSoleProprietor === true;
+        setIsSoleProprietor(isSoleProp);
+        
+        // Get the appropriate GUID based on business type
+        // For sole proprietor: use customer GUID (initiator GUID)
+        // For other business types: use business GUID
+        let partnerGuid = "";
+        if (isSoleProp) {
+          // Use the initiator/customer GUID
+          partnerGuid = preAppResponse?.initiators?.[0]?.initiatorBPGUID || 
+                        merchantData.customerDetails?.customer?.uuid || 
+                        "";
+        } else {
+          // Use the business GUID
+          partnerGuid = preAppResponse?.businessBPGUID || "";
+        }
+        
+        console.log("Fetching Standard Bank accounts:", { partnerGuid, offerId, isSoleProp });
+        
+        if (!partnerGuid || !offerId) {
+          console.log("Missing partnerGuid or offerId, skipping account fetch");
+          setHasStandardBankAccount(false);
+          setIsLoadingAccounts(false);
+          return;
+        }
+        
+        // Get access token
+        let accessToken = "";
+        const token = localStorage.getItem("accessToken");
+        if (token) {
+          try {
+            const parsed = JSON.parse(token);
+            accessToken = parsed.access_token || token;
+          } catch {
+            accessToken = token;
+          }
+        }
+        
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+        if (accessToken) {
+          headers["Authorization"] = `Bearer ${accessToken}`;
+        }
+        
+        const response = await fetch(
+          `/api/get-pay-account?partnerGuid=${partnerGuid}&offerId=${offerId}`,
+          { method: "GET", headers }
+        );
+        
+        const data = await response.json();
+        console.log("Standard Bank accounts response:", data);
+        
+        if (data.accounts && Array.isArray(data.accounts)) {
+          // Filter accounts to only include valid Standard Bank product codes
+          const validAccounts = data.accounts.filter(
+            (acc: StandardBankAccount) => VALID_SB_PRODUCT_CODES.includes(acc.productId)
+          );
+          
+          console.log("Valid Standard Bank accounts:", validAccounts);
+          
+          setStandardBankAccounts(validAccounts);
+          setHasStandardBankAccount(validAccounts.length > 0);
+        } else {
+          setStandardBankAccounts([]);
+          setHasStandardBankAccount(false);
+        }
+      } catch (error) {
+        console.error("Error fetching Standard Bank accounts:", error);
+        setStandardBankAccounts([]);
+        setHasStandardBankAccount(false);
+      } finally {
+        setIsLoadingAccounts(false);
+      }
+    };
+    
+    fetchStandardBankAccounts();
+  }, []);
 
   React.useEffect(() => {
     const data = localStorage.getItem("companyBankingDetailsFormData");
@@ -87,12 +278,71 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
 
   const estimatedTurnoverValue = watch("estimatedTurnover");
   const selectedBankName = watch("bankName");
+  const selectedStandardBankAccount = watch("selectedStandardBankAccount");
 
   // Get branches for selected bank
   const availableBranches = useMemo(() => {
     if (!selectedBankName) return [];
     return getBranchesForBank(selectedBankName);
   }, [selectedBankName]);
+
+  // Filter bank options - remove Standard Bank if no valid accounts
+  const filteredBankOptions = useMemo(() => {
+    if (hasStandardBankAccount === null) {
+      // Still loading, show all options
+      return bankNamesOptions;
+    }
+    
+    if (!hasStandardBankAccount) {
+      // No Standard Bank accounts, filter out Standard Bank
+      return bankNamesOptions.filter(
+        (opt) => opt.value !== "STANDARD BANK"
+      );
+    }
+    
+    return bankNamesOptions;
+  }, [hasStandardBankAccount]);
+
+  // Account type options - only Business Cheque for non-sole proprietors
+  const accountTypeOptions = useMemo(() => {
+    if (!isSoleProprietor) {
+      // Non-sole proprietor: only Business Cheque Account
+      return allAccountTypeOptions.filter(
+        (opt) => opt.value === "Business Cheque Account"
+      );
+    }
+    return allAccountTypeOptions;
+  }, [isSoleProprietor]);
+
+  // Standard Bank account options for dropdown
+  const standardBankAccountOptions = useMemo(() => {
+    return standardBankAccounts.map((acc) => ({
+      value: acc.bankAcct,
+      label: `${acc.bankAcct.replace(/^0+/, '')} - ${SB_PRODUCT_LABELS[acc.productId] || acc.productDesc}`,
+      account: acc,
+    }));
+  }, [standardBankAccounts]);
+
+  // Check if Standard Bank is selected and has linked accounts
+  const isStandardBankWithAccounts = selectedBankName === "STANDARD BANK" && standardBankAccounts.length > 0;
+
+  // Auto-fill account details when a Standard Bank account is selected
+  useEffect(() => {
+    if (selectedStandardBankAccount && isStandardBankWithAccounts) {
+      const selectedAccount = standardBankAccounts.find(
+        (acc) => acc.bankAcct === selectedStandardBankAccount
+      );
+      
+      if (selectedAccount) {
+        // Remove leading zeros from account number for display
+        const accountNo = selectedAccount.bankAcct.replace(/^0+/, '');
+        setValue("accountNumber", accountNo);
+        setValue("branchCode", selectedAccount.bankKey);
+        // Set account type based on product
+        setValue("accountType", "Business Cheque Account");
+      }
+    }
+  }, [selectedStandardBankAccount, isStandardBankWithAccounts, standardBankAccounts, setValue]);
 
   // Reset branch when bank changes
   useEffect(() => {
@@ -104,6 +354,97 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
     const isHighTurnover = Number(estimatedTurnoverValue) > 200_000;
     return isHighTurnover ? merchantCommissionRates.highTurnover : merchantCommissionRates.lowTurnover;
   }, [estimatedTurnoverValue]);
+
+  // Reset verification status when bank details change
+  useEffect(() => {
+    setVerificationStatus("idle");
+    setVerificationMessage("");
+  }, [selectedBankName, watch("accountNumber"), watch("branchCode")]);
+
+  // Verify bank account function
+  const verifyBankAccount = async () => {
+    const bankName = watch("bankName");
+    const accountNumber = watch("accountNumber");
+    const branchCode = watch("branchCode");
+    const accountHolderName = watch("accountHolderName");
+
+    if (!bankName || !accountNumber || !branchCode || !accountHolderName) {
+      setVerificationStatus("error");
+      setVerificationMessage("Please fill in all bank details before verifying.");
+      return;
+    }
+
+    // Get ID number from localStorage
+    const merchantData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+    const personalData = JSON.parse(localStorage.getItem("personalDetailsFormData") || "{}");
+    const idNumber = personalData.idNo || merchantData.businessDetails?.directorId || "";
+
+    if (!idNumber) {
+      setVerificationStatus("error");
+      setVerificationMessage("ID number not found. Please complete personal details first.");
+      return;
+    }
+
+    setVerificationStatus("verifying");
+    setVerificationMessage("");
+
+    try {
+      // Get access token
+      let accessToken = "";
+      const token = localStorage.getItem("accessToken");
+      if (token) {
+        try {
+          const parsed = JSON.parse(token);
+          accessToken = parsed.access_token || token;
+        } catch {
+          accessToken = token;
+        }
+      }
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+      }
+
+      const verificationPayload = {
+        account_number: accountNumber,
+        bank: bankName,
+        branch_code: branchCode,
+        id_number: idNumber,
+        id_type: "01", // National ID
+        account_name: accountHolderName,
+      };
+
+      console.log("Account Verification Payload:", verificationPayload);
+
+      const response = await fetch("/api/verify-account", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(verificationPayload),
+      });
+
+      const data = await response.json();
+      console.log("Account Verification Response:", data);
+
+      if (response.ok && data.verified !== false) {
+        setVerificationStatus("success");
+        setVerificationMessage(data.message || "Bank account verified successfully!");
+        // Store verified status
+        localStorage.setItem("bankAccountVerified", "true");
+      } else {
+        setVerificationStatus("error");
+        setVerificationMessage(data.message || data.error || "Bank account verification failed. Please check your details.");
+        localStorage.setItem("bankAccountVerified", "false");
+      }
+    } catch (error: any) {
+      console.error("Account verification error:", error);
+      setVerificationStatus("error");
+      setVerificationMessage(error.message || "An error occurred during verification. Please try again.");
+      localStorage.setItem("bankAccountVerified", "false");
+    }
+  };
 
   return (
     <div className="py-6 md:py-8">
@@ -145,13 +486,19 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
             {/* Bank Name */}
             <div className="space-y-2">
               <Label htmlFor="bankName">Bank name</Label>
+              {isLoadingAccounts && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Checking for linked Standard Bank accounts...</span>
+                </div>
+              )}
               <Controller
                 name="bankName"
                 control={control}
                 render={({ field }) => (
                   <CustomSelect
                     value={(() => {
-                      const found = bankNamesOptions.find(
+                      const found = filteredBankOptions.find(
                         (opt) => opt.value === field.value
                       );
                       return found ? found : null;
@@ -159,8 +506,10 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                     onChange={(option) => {
                       const selected = Array.isArray(option) ? option[0] : option;
                       field.onChange(selected ? selected.value : "");
+                      // Reset Standard Bank account selection when bank changes
+                      setValue("selectedStandardBankAccount", "");
                     }}
-                    options={bankNamesOptions}
+                    options={filteredBankOptions}
                     placeholder="Please select"
                   />
                 )}
@@ -169,6 +518,36 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                 <p className="text-red-500 text-sm">{errors.bankName.message as string}</p>
               )}
             </div>
+
+            {/* Standard Bank Account Selection - Only show when Standard Bank is selected and has linked accounts */}
+            {isStandardBankWithAccounts && (
+              <div className="space-y-2">
+                <Label htmlFor="selectedStandardBankAccount">Select your Standard Bank account</Label>
+                <Controller
+                  name="selectedStandardBankAccount"
+                  control={control}
+                  render={({ field }) => (
+                    <CustomSelect
+                      value={(() => {
+                        const found = standardBankAccountOptions.find(
+                          (opt) => opt.value === field.value
+                        );
+                        return found ? found : null;
+                      })()}
+                      onChange={(option) => {
+                        const selected = Array.isArray(option) ? option[0] : option;
+                        field.onChange(selected ? selected.value : "");
+                      }}
+                      options={standardBankAccountOptions}
+                      placeholder="Select your account"
+                    />
+                  )}
+                />
+                <p className="text-sm text-gray-500">
+                  Your linked Standard Bank accounts are shown above. Select one to auto-fill account details.
+                </p>
+              </div>
+            )}
 
             {/* Account Holder's Name */}
             <div className="space-y-2">
@@ -220,7 +599,11 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                 id="accountNumber"
                 {...register("accountNumber")}
                 className={errors.accountNumber ? "border-red-500" : ""}
+                readOnly={isStandardBankWithAccounts && !!selectedStandardBankAccount}
               />
+              {isStandardBankWithAccounts && selectedStandardBankAccount && (
+                <p className="text-sm text-gray-500">Account number auto-filled from selected Standard Bank account.</p>
+              )}
               {errors.accountNumber && (
                 <p className="text-red-500 text-sm">{errors.accountNumber.message as string}</p>
               )}
@@ -235,8 +618,9 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                 render={({ field }) => (
                   <CustomSelect
                     value={(() => {
+                      // Match by label since we store the label in field.value
                       const found = availableBranches.find(
-                        (opt) => opt.value === field.value
+                        (opt) => opt.label === field.value || opt.value === field.value
                       );
                       return found ? found : null;
                     })()}
@@ -267,9 +651,47 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
                 id="branchCode"
                 {...register("branchCode")}
                 className={errors.branchCode ? "border-red-500" : ""}
+                readOnly={isStandardBankWithAccounts && !!selectedStandardBankAccount}
               />
+              {isStandardBankWithAccounts && selectedStandardBankAccount && (
+                <p className="text-sm text-gray-500">Branch code auto-filled from selected Standard Bank account.</p>
+              )}
               {errors.branchCode && (
                 <p className="text-red-500 text-sm">{errors.branchCode.message as string}</p>
+              )}
+            </div>
+
+            {/* Verify Account Button */}
+            <div className="space-y-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={verifyBankAccount}
+                disabled={verificationStatus === "verifying"}
+                className="w-full border-primary text-primary hover:bg-primary hover:text-white"
+              >
+                {verificationStatus === "verifying" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  "Verify Bank Account"
+                )}
+              </Button>
+
+              {/* Verification Status */}
+              {verificationStatus === "success" && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="text-sm text-green-700">{verificationMessage}</span>
+                </div>
+              )}
+              {verificationStatus === "error" && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <XCircle className="h-5 w-5 text-red-600" />
+                  <span className="text-sm text-red-700">{verificationMessage}</span>
+                </div>
               )}
             </div>
 
@@ -299,63 +721,72 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
               <h2 className="text-xl">Merchant commission rates</h2>
             </div>
 
+            {/* Show rates based on bank selection */}
             <div className="bg-white border border-gray-200 rounded-md p-4 space-y-6">
-              {/* Standard Rates */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-gray-200">
                   <span className="text-sm text-gray-700">
                     Debit card transaction costs
                   </span>
-                  <span className="text-sm text-gray-900">{commissionRates.nonSb.dr}%</span>
+                  <span className="text-sm text-gray-900">
+                    {selectedBankName === "STANDARD BANK" ? commissionRates.sb.dr : commissionRates.nonSb.dr}%
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-200">
                   <span className="text-sm text-gray-700">
                     Credit card transaction costs
                   </span>
-                  <span className="text-sm text-gray-900">{commissionRates.nonSb.cr}%</span>
+                  <span className="text-sm text-gray-900">
+                    {selectedBankName === "STANDARD BANK" ? commissionRates.sb.cr : commissionRates.nonSb.cr}%
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2">
                   <span className="text-sm text-gray-700">
                     International transaction costs
                   </span>
-                  <span className="text-sm text-gray-900">{commissionRates.nonSb.fr}%</span>
+                  <span className="text-sm text-gray-900">
+                    {selectedBankName === "STANDARD BANK" ? commissionRates.sb.fr : commissionRates.nonSb.fr}%
+                  </span>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 !mt-6">
-              <h3 className="text-sm font-medium text-primary uppercase tracking-wide">
-                Rates for Standard Bank Account Holders
-              </h3>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-md p-4 space-y-6 relative">
-              {/* Standard Bank Account Holders */}
-              <div>
-                <div className="absolute top-0 left-0 bg-gradient-to-tr from-primary to-primary-light text-white text-xs px-3 py-1 rounded-br-2xl inline-block mb-4">
-                  Discounted rates
-                </div>
 
-                <div className="space-y-3 mt-5">
-                  <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                    <span className="text-sm text-gray-700">
-                      Debit card transaction costs
-                    </span>
-                    <span className="text-sm text-gray-900">{commissionRates.sb.dr}%</span>
+            {/* Show Standard Bank rates as incentive only when non-SB bank selected */}
+            {selectedBankName !== "STANDARD BANK" && (
+              <>
+                <div className="flex items-center gap-2 !mt-6">
+                  <h3 className="text-sm font-medium text-primary uppercase tracking-wide">
+                    Rates for Standard Bank Account Holders
+                  </h3>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-md p-4 space-y-6 relative">
+                  <div className="absolute top-0 left-0 bg-gradient-to-tr from-primary to-primary-light text-white text-xs px-3 py-1 rounded-br-2xl inline-block mb-4">
+                    Discounted rates
                   </div>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                    <span className="text-sm text-gray-700">
-                      Credit card transaction costs
-                    </span>
-                    <span className="text-sm text-gray-900">{commissionRates.sb.cr}%</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm text-gray-700">
-                      International transaction costs
-                    </span>
-                    <span className="text-sm text-gray-900">{commissionRates.sb.fr}%</span>
+
+                  <div className="space-y-3 mt-5">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                      <span className="text-sm text-gray-700">
+                        Debit card transaction costs
+                      </span>
+                      <span className="text-sm text-gray-900">{commissionRates.sb.dr}%</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                      <span className="text-sm text-gray-700">
+                        Credit card transaction costs
+                      </span>
+                      <span className="text-sm text-gray-900">{commissionRates.sb.cr}%</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-sm text-gray-700">
+                        International transaction costs
+                      </span>
+                      <span className="text-sm text-gray-900">{commissionRates.sb.fr}%</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
         <div className="flex flex-col md:flex-row gap-3 !mt-12">

@@ -182,38 +182,50 @@ export const deliveryDetailsSchema = yup.object().shape({
 
 // Company Financial Info Schema
 export const companyFinancialInfoSchema = yup.object().shape({
-  annualTurnover: yup.string().required("Annual turnover is required"),
-  monthlyProfit: yup.string().required("Monthly profit is required"),
-  averageTransactionAmount: yup.string().required("Average transaction amount is required"),
-  irregularIncome: yup.string().required("Irregular income is required"),
-  fundingSource: yup.array().of(yup.string()).min(1, "Please select at least one funding source"),
   entityClassification: yup.string().required("Entity classification is required"),
   taxResidencyOutsideSA: yup.string().oneOf(["yes", "no"]).required("Please select tax residency option"),
-  bbeTransaction: yup.string().when("taxResidencyOutsideSA", {
-    is: (val: string) => val === "yes" || val === "no",
-    then: (schema) => schema.required("BBE transaction is required"),
-    otherwise: (schema) => schema.notRequired(),
-  }),
-  profitFromBusiness: yup.string().when("taxResidencyOutsideSA", {
-    is: (val: string) => val === "yes" || val === "no",
-    then: (schema) => schema.required("Profit from business is required"),
-    otherwise: (schema) => schema.notRequired(),
-  }),
-  countryOfTaxResidency: yup.string().when("taxResidencyOutsideSA", {
+  
+  // Funding source is always required
+  fundingSource: yup.array().of(yup.string()).min(1, "Please select at least one funding source"),
+  
+  // Tax countries - conditionally required when tax residency is yes
+  taxCountries: yup.array().when("taxResidencyOutsideSA", {
     is: "yes",
-    then: (schema) => schema.required("Country of tax residency is required"),
+    then: (schema) => schema.of(
+      yup.object().shape({
+        country: yup.string().required("Country of tax residency is required"),
+        taxNumber: yup.string(), // Optional - user may click "I don't have a tax number"
+        noTaxNumberReason: yup.string(), // Optional - only needed if no tax number
+        showNoTaxReason: yup.boolean(),
+      })
+    ).min(1, "At least one country is required"),
     otherwise: (schema) => schema.notRequired(),
   }),
-  foreignTaxNumber: yup.string().when("taxResidencyOutsideSA", {
-    is: "yes",
-    then: (schema) => schema.required("Foreign tax number is required"),
+  
+  // Passive income question - required when entity classification is Financial Institution
+  passiveIncomeQuestion: yup.string().when("entityClassification", {
+    is: "FI",
+    then: (schema) => schema.oneOf(["yes", "no"]).required("Please answer the passive income question"),
     otherwise: (schema) => schema.notRequired(),
   }),
-  reasonForNoTaxNumber: yup.string().when(["taxResidencyOutsideSA", "foreignTaxNumber"], {
-    is: (taxResidency: string, taxNumber: string) => taxResidency === "yes" && !taxNumber,
-    then: (schema) => schema.required("Reason for not having tax number is required"),
-    otherwise: (schema) => schema.notRequired(),
-  }),
+  
+  // These fields are optional since they can be hidden with X button
+  bbeTransaction: yup.string().notRequired(),
+  irregularIncome: yup.string().notRequired(),
+  profitFromBusiness: yup.string().notRequired(),
+  
+  // Old fields - make them optional for backwards compatibility
+  annualTurnover: yup.string().notRequired(),
+  monthlyProfit: yup.string().notRequired(),
+  averageTransactionAmount: yup.string().notRequired(),
+  countryOfTaxResidency: yup.string().notRequired(),
+  foreignTaxNumber: yup.string().notRequired(),
+  reasonForNoTaxNumber: yup.string().notRequired(),
+  
+  // Visibility flags - not validated
+  showBbeTransaction: yup.boolean().notRequired(),
+  showIrregularIncome: yup.boolean().notRequired(),
+  showProfitFromBusiness: yup.boolean().notRequired(),
 });
 
 // Card Machine Summary Schema

@@ -59,7 +59,7 @@ const TellusMore = (props: Props) => {
                     label: "I want to rent or buy a new card machine",
                   },
                   {
-                    value: "activate",
+                    value: "takealot",
                     label:
                       "I want to activate card machine(s) I've bought from Takealot",
                   },

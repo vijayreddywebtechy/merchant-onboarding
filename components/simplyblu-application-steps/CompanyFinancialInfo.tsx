@@ -1,38 +1,17 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import CustomSelect from "@/components/dynamic/CustomSelect";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
-import { Info } from "lucide-react";
+import { Info, XCircle, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { companyFinancialInfoSchema } from "@/lib/validationSchemas";
 import { amountRangeOptions } from "@/lib/data_copy";
-import { entClassifOptions,countryOptions,sourcOfFundsOptions } from "@/lib/data";
-
-// Entity Classification options
-// const entityClassificationOptions = [
-//   { value: "sole-proprietor", label: "Sole Proprietor" },
-//   { value: "partnership", label: "Partnership" },
-//   { value: "private-company", label: "Private Company" },
-//   { value: "public-company", label: "Public Company" },
-//   { value: "non-profit", label: "Non-Profit Organization" },
-//   { value: "trust", label: "Trust" },
-// ];
-
-// Country options
-// const countryOptions = [
-//   { value: "south-africa", label: "South Africa" },
-//   { value: "united-states", label: "United States" },
-//   { value: "united-kingdom", label: "United Kingdom" },
-//   { value: "germany", label: "Germany" },
-//   { value: "france", label: "France" },
-//   { value: "australia", label: "Australia" },
-//   { value: "canada", label: "Canada" },
-// ];
+import { entClassifOptions, countryOptions, sourcOfFundsOptions, taxTypeOptions } from "@/lib/data";
 
 // Reason for not having tax number options
 const reasonForNoTaxNumberOptions = [
@@ -41,6 +20,14 @@ const reasonForNoTaxNumberOptions = [
   { value: "exempt", label: "Exempt from tax registration" },
   { value: "other", label: "Other" },
 ];
+
+// Type for a single country tax entry
+type CountryTaxEntry = {
+  country: string;
+  taxNumber: string;
+  noTaxNumberReason: string;
+  showNoTaxReason: boolean;
+};
 
 type FinancialData = {
   annualTurnover: string;
@@ -52,9 +39,17 @@ type FinancialData = {
   taxResidencyOutsideSA: string;
   bbeTransaction: string;
   profitFromBusiness: string;
+  // Multiple countries support
+  taxCountries: CountryTaxEntry[];
+  // Deprecated but kept for backwards compatibility
   countryOfTaxResidency: string;
   foreignTaxNumber: string;
   reasonForNoTaxNumber: string;
+  passiveIncomeQuestion: string;
+  // Track which optional fields are visible
+  showBbeTransaction: boolean;
+  showIrregularIncome: boolean;
+  showProfitFromBusiness: boolean;
 };
 
 interface Props {
@@ -71,6 +66,8 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
     watch,
     handleSubmit,
     reset,
+    setValue,
+    getValues,
   } = useForm<FinancialData>({
     resolver: yupResolver(companyFinancialInfoSchema) as any,
     mode: "onChange",
@@ -84,16 +81,35 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
       taxResidencyOutsideSA: "",
       bbeTransaction: "",
       profitFromBusiness: "",
+      taxCountries: [{ country: "", taxNumber: "", noTaxNumberReason: "", showNoTaxReason: false }],
       countryOfTaxResidency: "",
       foreignTaxNumber: "",
       reasonForNoTaxNumber: "",
+      passiveIncomeQuestion: "",
+      showBbeTransaction: true,
+      showIrregularIncome: true,
+      showProfitFromBusiness: true,
     },
+  });
+
+  // Field array for managing multiple tax countries
+  const { fields: taxCountryFields, append: appendCountry, remove: removeCountry } = useFieldArray({
+    control,
+    name: "taxCountries",
   });
 
   React.useEffect(() => {
     const data = localStorage.getItem("companyFinancialInfoFormData");
     if (data) {
-      reset(JSON.parse(data));
+      const parsedData = JSON.parse(data);
+      // Ensure visibility flags default to true if not present in saved data
+      reset({
+        ...parsedData,
+        showBbeTransaction: parsedData.showBbeTransaction !== false,
+        showIrregularIncome: parsedData.showIrregularIncome !== false,
+        showProfitFromBusiness: parsedData.showProfitFromBusiness !== false,
+        taxCountries: parsedData.taxCountries || [{ country: "", taxNumber: "", noTaxNumberReason: "", showNoTaxReason: false }],
+      });
     } else {
       // Try to prefill from merchantOnboardingData
       const merchantData = localStorage.getItem("merchantOnboardingData");
@@ -118,6 +134,18 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
           averageTransactionAmount: "",
           irregularIncome: "",
           fundingSource: [],
+          entityClassification: "",
+          taxResidencyOutsideSA: "",
+          bbeTransaction: "",
+          profitFromBusiness: "",
+          taxCountries: [{ country: "", taxNumber: "", noTaxNumberReason: "", showNoTaxReason: false }],
+          countryOfTaxResidency: "",
+          foreignTaxNumber: "",
+          reasonForNoTaxNumber: "",
+          passiveIncomeQuestion: "",
+          showBbeTransaction: true,
+          showIrregularIncome: true,
+          showProfitFromBusiness: true,
         });
       }
     }
@@ -125,8 +153,32 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
 
   const fundingSource = watch("fundingSource");
   const taxResidencyOutsideSA = watch("taxResidencyOutsideSA");
+  const entityClassification = watch("entityClassification");
+  // Default to true if undefined (for backwards compatibility with old saved data)
+  const showBbeTransaction = watch("showBbeTransaction") !== false;
+  const showIrregularIncome = watch("showIrregularIncome") !== false;
+  const showProfitFromBusiness = watch("showProfitFromBusiness") !== false;
+  const taxCountries = watch("taxCountries");
 
-  const [showTaxNumberReason, setShowTaxNumberReason] = React.useState(false);
+  // Helper function to toggle no tax reason for a specific country
+  const toggleNoTaxReason = (index: number) => {
+    const countries = getValues("taxCountries");
+    if (countries[index]) {
+      setValue(`taxCountries.${index}.showNoTaxReason`, !countries[index].showNoTaxReason);
+    }
+  };
+
+  // Helper function to add a new country
+  const handleAddCountry = () => {
+    appendCountry({ country: "", taxNumber: "", noTaxNumberReason: "", showNoTaxReason: false });
+  };
+
+  // Helper function to remove a country (keep at least one)
+  const handleRemoveCountry = (index: number) => {
+    if (taxCountryFields.length > 1) {
+      removeCountry(index);
+    }
+  };
 
   // Save form data in real-time to localStorage
   // Save form data in real-time to localStorage
@@ -142,8 +194,14 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
     (window as any).__companyFinancialInfoValidate = async () => {
       const isValid = await new Promise<boolean>((resolve) => {
         handleSubmit(
-          () => resolve(true),
-          () => resolve(false)
+          () => {
+            console.log("CompanyFinancialInfo: Validation passed");
+            resolve(true);
+          },
+          (errors) => {
+            console.log("CompanyFinancialInfo: Validation failed", errors);
+            resolve(false);
+          }
         )();
       });
       return isValid;
@@ -171,7 +229,7 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Entity Classification */}
             <div className="space-y-2">
-              <Label htmlFor="entityClassification">Entity classification</Label>
+              <Label htmlFor="entityClassification" className="uppercase text-xs font-medium tracking-wider text-gray-600">Entity classification</Label>
               <Controller
                 name="entityClassification"
                 control={control}
@@ -200,6 +258,55 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
                 )}
               />
             </div>
+
+            {/* Financial Institution - Passive Income Question Panel */}
+            {entityClassification === "FI" && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-5 space-y-4">
+                <div className="flex items-start gap-2">
+                  <Info size={20} className="text-primary flex-shrink-0 mt-0.5" />
+                  <h3 className="font-medium text-gray-800 uppercase text-sm tracking-wide">
+                    Does your company
+                  </h3>
+                </div>
+                
+                <ul className="space-y-3 text-sm text-gray-700">
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold">▲</span>
+                    <span>Earn more than 50% of its gross income from passive sources such as interest, dividends, royalties, etc.?</span>
+                  </li>
+                  <li className="text-center font-medium text-gray-500">OR</li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold">▲</span>
+                    <span>Hold more than 50% of its assets to generate passive income such as interest, dividends, royalties, etc.?</span>
+                  </li>
+                </ul>
+
+                <Controller
+                  name="passiveIncomeQuestion"
+                  control={control}
+                  render={({ field }) => (
+                    <RadioGroup
+                      value={field.value}
+                      onValueChange={(value) => field.onChange(value)}
+                      className="flex gap-6 pt-2"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="yes" id="passive-income-yes" />
+                        <Label htmlFor="passive-income-yes" className="cursor-pointer">
+                          Yes
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="no" id="passive-income-no" />
+                        <Label htmlFor="passive-income-no" className="cursor-pointer">
+                          No
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  )}
+                />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -382,90 +489,22 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
           {/* Conditional Fields - Show when tax residency is Yes */}
           {taxResidencyOutsideSA === "yes" && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* Country of Tax Residency */}
-                <div className="space-y-2">
-                  <Label htmlFor="countryOfTaxResidency">
-                    Country of tax residency
-                  </Label>
-                  <Controller
-                    name="countryOfTaxResidency"
-                    control={control}
-                    render={({ field }) => (
-                      <>
-                        <CustomSelect
-                          value={(() => {
-                            const found = countryOptions.find(
-                              (opt) => opt.value === field.value
-                            );
-                            return found ? found : null;
-                          })()}
-                          onChange={(option: any) => {
-                            const selected = Array.isArray(option) ? option[0] : option;
-                            field.onChange(selected ? selected.value : "");
-                          }}
-                          options={countryOptions}
-                          placeholder="Please select"
-                        />
-                        {errors.countryOfTaxResidency && (
-                          <p className="text-sm text-red-500">
-                            {errors.countryOfTaxResidency.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-
-                {/* Foreign Tax Number */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label htmlFor="foreignTaxNumber">
-                      Foreign tax number
-                    </Label>
-                    <button
-                      type="button"
-                      onClick={() => setShowTaxNumberReason(!showTaxNumberReason)}
-                      className="text-xs text-blue-600 hover:underline"
-                    >
-                      I DON'T HAVE A TAX NUMBER
-                    </button>
-                  </div>
-                  <Controller
-                    name="foreignTaxNumber"
-                    control={control}
-                    render={({ field }) => (
-                      <>
-                        <Input
-                          {...field}
-                          placeholder="Enter tax number"
-                        />
-                        {errors.foreignTaxNumber && (
-                          <p className="text-sm text-red-500">
-                            {errors.foreignTaxNumber.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-              </div>
-
-              {/* Reason for not having tax number - conditional */}
-              {showTaxNumberReason && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="reasonForNoTaxNumber">
-                      Reason for not having a foreign tax number
-                    </Label>
-                    <Controller
-                      name="reasonForNoTaxNumber"
-                      control={control}
-                      render={({ field }) => (
-                        <>
+              {/* Multiple Countries Tax Residency */}
+              {taxCountryFields.map((field, index) => (
+                <div key={field.id} className="mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Country of Tax Residency */}
+                    <div className="space-y-2">
+                      <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
+                        Country of tax residency
+                      </Label>
+                      <Controller
+                        name={`taxCountries.${index}.country`}
+                        control={control}
+                        render={({ field }) => (
                           <CustomSelect
                             value={(() => {
-                              const found = reasonForNoTaxNumberOptions.find(
+                              const found = countryOptions.find(
                                 (opt) => opt.value === field.value
                               );
                               return found ? found : null;
@@ -474,59 +513,173 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
                               const selected = Array.isArray(option) ? option[0] : option;
                               field.onChange(selected ? selected.value : "");
                             }}
-                            options={reasonForNoTaxNumberOptions}
+                            options={countryOptions}
                             placeholder="Please select"
                           />
-                          {errors.reasonForNoTaxNumber && (
+                        )}
+                      />
+                    </div>
+
+                    {/* Foreign Tax Number */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
+                          Foreign tax number
+                        </Label>
+                        <button
+                          type="button"
+                          onClick={() => toggleNoTaxReason(index)}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          I DON'T HAVE A TAX NUMBER
+                        </button>
+                      </div>
+                      <Controller
+                        name={`taxCountries.${index}.taxNumber`}
+                        control={control}
+                        render={({ field }) => (
+                          <CustomSelect
+                            value={(() => {
+                              const found = taxTypeOptions.find(
+                                (opt) => opt.value === field.value
+                              );
+                              return found ? found : null;
+                            })()}
+                            onChange={(option: any) => {
+                              const selected = Array.isArray(option) ? option[0] : option;
+                              field.onChange(selected ? selected.value : "");
+                            }}
+                            options={taxTypeOptions}
+                            placeholder="Please select"
+                          />
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Remove country button (only show if more than one country) */}
+                  {taxCountryFields.length > 1 && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCountry(index)}
+                        className="text-sm text-red-500 hover:text-red-600 flex items-center gap-1"
+                      >
+                        <XCircle size={16} />
+                        Remove this country
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Add Additional Country Button */}
+              <div className="mb-6">
+                <button
+                  type="button"
+                  onClick={handleAddCountry}
+                  className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-2 font-medium"
+                >
+                  <PlusCircle size={18} />
+                  ADD ADDITIONAL COUNTRY
+                </button>
+              </div>
+
+              {/* Row: Reason for not having tax number + BBE Transaction */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* Reason for not having a foreign tax number - shown when any country has it enabled */}
+                {taxCountries?.some(c => c.showNoTaxReason) && (
+                  <div className="space-y-2 relative">
+                    <div className="flex items-center justify-between">
+                      <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
+                        Reason for not having a foreign tax number
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Hide all no tax reasons
+                          taxCountries?.forEach((_, idx) => {
+                            setValue(`taxCountries.${idx}.showNoTaxReason`, false);
+                          });
+                        }}
+                        className="text-blue-500 hover:text-blue-600"
+                      >
+                        <XCircle size={20} />
+                      </button>
+                    </div>
+                    <Controller
+                      name="taxCountries.0.noTaxNumberReason"
+                      control={control}
+                      render={({ field }) => (
+                        <CustomSelect
+                          value={(() => {
+                            const found = reasonForNoTaxNumberOptions.find(
+                              (opt) => opt.value === field.value
+                            );
+                            return found ? found : null;
+                          })()}
+                          onChange={(option: any) => {
+                            const selected = Array.isArray(option) ? option[0] : option;
+                            field.onChange(selected ? selected.value : "");
+                          }}
+                          options={reasonForNoTaxNumberOptions}
+                          placeholder="Please select"
+                        />
+                      )}
+                    />
+                  </div>
+                )}
+
+                {/* BBE Transaction with X button */}
+                {showBbeTransaction && (
+                  <div className="space-y-2 relative">
+                    <div className="flex items-center justify-between">
+                      <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
+                        BBE transaction (average monthly amount)
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => setValue("showBbeTransaction", false)}
+                        className="text-blue-500 hover:text-blue-600"
+                      >
+                        <XCircle size={20} />
+                      </button>
+                    </div>
+                    <Controller
+                      name="bbeTransaction"
+                      control={control}
+                      render={({ field }) => (
+                        <>
+                          <CustomSelect
+                            value={(() => {
+                              const found = amountRangeOptions.find(
+                                (opt) => opt.value === field.value
+                              );
+                              return found ? found : null;
+                            })()}
+                            onChange={(option: any) => {
+                              const selected = Array.isArray(option) ? option[0] : option;
+                              field.onChange(selected ? selected.value : "");
+                            }}
+                            options={amountRangeOptions}
+                            placeholder="R"
+                          />
+                          {errors.bbeTransaction && (
                             <p className="text-sm text-red-500">
-                              {errors.reasonForNoTaxNumber.message}
+                              {errors.bbeTransaction.message}
                             </p>
                           )}
                         </>
                       )}
                     />
                   </div>
-                  <div></div>
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* BBE Transaction and Funding Source */}
+              {/* Row: Funding Source + Irregular Income */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div className="space-y-2">
-                  <Label htmlFor="bbeTransaction">
-                    BBE transaction (average monthly amount)
-                  </Label>
-                  <Controller
-                    name="bbeTransaction"
-                    control={control}
-                    render={({ field }) => (
-                      <>
-                        <CustomSelect
-                          value={(() => {
-                            const found = amountRangeOptions.find(
-                              (opt) => opt.value === field.value
-                            );
-                            return found ? found : null;
-                          })()}
-                          onChange={(option: any) => {
-                            const selected = Array.isArray(option) ? option[0] : option;
-                            field.onChange(selected ? selected.value : "");
-                          }}
-                          options={amountRangeOptions}
-                          placeholder="R"
-                        />
-                        {errors.bbeTransaction && (
-                          <p className="text-sm text-red-500">
-                            {errors.bbeTransaction.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="fundingSource">
+                  <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
                     How are you funding your business (choose one or more)
                   </Label>
                   <Controller
@@ -549,185 +702,6 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
                         {errors.fundingSource && (
                           <p className="text-sm text-red-500">
                             {errors.fundingSource.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-              </div>
-
-              {/* Irregular Income and Profit from Business */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="irregularIncome">
-                    Irregular income (average monthly amount)
-                  </Label>
-                  <Controller
-                    name="irregularIncome"
-                    control={control}
-                    render={({ field }) => (
-                      <>
-                        <CustomSelect
-                          value={(() => {
-                            const found = amountRangeOptions.find(
-                              (opt) => opt.value === field.value
-                            );
-                            return found ? found : null;
-                          })()}
-                          onChange={(option: any) => {
-                            const selected = Array.isArray(option) ? option[0] : option;
-                            field.onChange(selected ? selected.value : "");
-                          }}
-                          options={amountRangeOptions}
-                          placeholder="R"
-                        />
-                        {errors.irregularIncome && (
-                          <p className="text-sm text-red-500">
-                            {errors.irregularIncome.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="profitFromBusiness">
-                    Profit from business activity (average monthly amount)
-                  </Label>
-                  <Controller
-                    name="profitFromBusiness"
-                    control={control}
-                    render={({ field }) => (
-                      <>
-                        <CustomSelect
-                          value={(() => {
-                            const found = amountRangeOptions.find(
-                              (opt) => opt.value === field.value
-                            );
-                            return found ? found : null;
-                          })()}
-                          onChange={(option: any) => {
-                            const selected = Array.isArray(option) ? option[0] : option;
-                            field.onChange(selected ? selected.value : "");
-                          }}
-                          options={amountRangeOptions}
-                          placeholder="R"
-                        />
-                        {errors.profitFromBusiness && (
-                          <p className="text-sm text-red-500">
-                            {errors.profitFromBusiness.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Conditional Fields - Show when tax residency is No */}
-          {taxResidencyOutsideSA === "no" && (
-            <>
-              {/* Funding Source */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div className="space-y-2">
-                  <Label htmlFor="fundingSource">
-                    How are you funding your business (choose one or more)
-                  </Label>
-                  <Controller
-                    name="fundingSource"
-                    control={control}
-                    render={({ field }) => (
-                      <>
-                        <CustomSelect
-                          value={sourcOfFundsOptions.filter((opt) =>
-                            field.value && field.value.includes(opt.value)
-                          )}
-                          onChange={(options: any) => {
-                            const selected = Array.isArray(options) ? options : [];
-                            field.onChange(selected.map((opt: any) => opt.value));
-                          }}
-                          options={sourcOfFundsOptions}
-                          placeholder="Please select"
-                          isMulti={true}
-                        />
-                        {errors.fundingSource && (
-                          <p className="text-sm text-red-500">
-                            {errors.fundingSource.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-
-                {/* BBE Transaction */}
-                <div className="space-y-2">
-                  <Label htmlFor="bbeTransaction">
-                    BBE transaction (average monthly amount)
-                  </Label>
-                  <Controller
-                    name="bbeTransaction"
-                    control={control}
-                    render={({ field }) => (
-                      <>
-                        <CustomSelect
-                          value={(() => {
-                            const found = amountRangeOptions.find(
-                              (opt) => opt.value === field.value
-                            );
-                            return found ? found : null;
-                          })()}
-                          onChange={(option: any) => {
-                            const selected = Array.isArray(option) ? option[0] : option;
-                            field.onChange(selected ? selected.value : "");
-                          }}
-                          options={amountRangeOptions}
-                          placeholder="R"
-                        />
-                        {errors.bbeTransaction && (
-                          <p className="text-sm text-red-500">
-                            {errors.bbeTransaction.message}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-              </div>
-
-              {/* Profit and Irregular Income */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Profit from Business Activity */}
-                <div className="space-y-2">
-                  <Label htmlFor="profitFromBusiness">
-                    Profit from business activity (average monthly amount)
-                  </Label>
-                  <Controller
-                    name="profitFromBusiness"
-                    control={control}
-                    render={({ field }) => (
-                      <>
-                        <CustomSelect
-                          value={(() => {
-                            const found = amountRangeOptions.find(
-                              (opt) => opt.value === field.value
-                            );
-                            return found ? found : null;
-                          })()}
-                          onChange={(option: any) => {
-                            const selected = Array.isArray(option) ? option[0] : option;
-                            field.onChange(selected ? selected.value : "");
-                          }}
-                          options={amountRangeOptions}
-                          placeholder="R"
-                        />
-                        {errors.profitFromBusiness && (
-                          <p className="text-sm text-red-500">
-                            {errors.profitFromBusiness.message}
                           </p>
                         )}
                       </>
@@ -736,8 +710,211 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
                 </div>
 
                 {/* Irregular Income */}
+                {showIrregularIncome && (
+                  <div className="space-y-2 relative">
+                    <div className="flex items-center justify-between">
+                      <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
+                        Irregular income (average monthly amount)
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => setValue("showIrregularIncome", false)}
+                        className="text-blue-500 hover:text-blue-600"
+                      >
+                        <XCircle size={20} />
+                      </button>
+                    </div>
+                    <Controller
+                      name="irregularIncome"
+                      control={control}
+                      render={({ field }) => (
+                        <>
+                          <CustomSelect
+                            value={(() => {
+                              const found = amountRangeOptions.find(
+                                (opt) => opt.value === field.value
+                              );
+                              return found ? found : null;
+                            })()}
+                            onChange={(option: any) => {
+                              const selected = Array.isArray(option) ? option[0] : option;
+                              field.onChange(selected ? selected.value : "");
+                            }}
+                            options={amountRangeOptions}
+                            placeholder="R"
+                          />
+                          {errors.irregularIncome && (
+                            <p className="text-sm text-red-500">
+                              {errors.irregularIncome.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Row: Profit from Business Activity (alone) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Profit from Business Activity */}
+                {showProfitFromBusiness && (
+                  <div className="space-y-2 relative">
+                    <div className="flex items-center justify-between">
+                      <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
+                        Profit from business activity (average monthly amount)
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => setValue("showProfitFromBusiness", false)}
+                        className="text-blue-500 hover:text-blue-600"
+                      >
+                        <XCircle size={20} />
+                      </button>
+                    </div>
+                    <Controller
+                      name="profitFromBusiness"
+                      control={control}
+                      render={({ field }) => (
+                        <>
+                          <CustomSelect
+                            value={(() => {
+                              const found = amountRangeOptions.find(
+                                (opt) => opt.value === field.value
+                              );
+                              return found ? found : null;
+                            })()}
+                            onChange={(option: any) => {
+                              const selected = Array.isArray(option) ? option[0] : option;
+                              field.onChange(selected ? selected.value : "");
+                            }}
+                            options={amountRangeOptions}
+                            placeholder="R"
+                          />
+                          {errors.profitFromBusiness && (
+                            <p className="text-sm text-red-500">
+                              {errors.profitFromBusiness.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Conditional Fields - Show when tax residency is No */}
+          {taxResidencyOutsideSA === "no" && (
+            <>
+              {/* Row: Funding Source + BBE Transaction */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div className="space-y-2">
-                  <Label htmlFor="irregularIncome">
+                  <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
+                    How are you funding your business (choose one or more)
+                  </Label>
+                  <Controller
+                    name="fundingSource"
+                    control={control}
+                    render={({ field }) => (
+                      <>
+                        <CustomSelect
+                          value={sourcOfFundsOptions.filter((opt) =>
+                            field.value && field.value.includes(opt.value)
+                          )}
+                          onChange={(options: any) => {
+                            const selected = Array.isArray(options) ? options : [];
+                            field.onChange(selected.map((opt: any) => opt.value));
+                          }}
+                          options={sourcOfFundsOptions}
+                          placeholder="Please select"
+                          isMulti={true}
+                        />
+                        {errors.fundingSource && (
+                          <p className="text-sm text-red-500">
+                            {errors.fundingSource.message}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  />
+                </div>
+
+                {/* BBE Transaction - No X button when Tax Residency = No */}
+                <div className="space-y-2">
+                  <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
+                    BBE transaction (average monthly amount)
+                  </Label>
+                  <Controller
+                    name="bbeTransaction"
+                    control={control}
+                    render={({ field }) => (
+                      <>
+                        <CustomSelect
+                          value={(() => {
+                            const found = amountRangeOptions.find(
+                              (opt) => opt.value === field.value
+                            );
+                            return found ? found : null;
+                          })()}
+                          onChange={(option: any) => {
+                            const selected = Array.isArray(option) ? option[0] : option;
+                            field.onChange(selected ? selected.value : "");
+                          }}
+                          options={amountRangeOptions}
+                          placeholder="R"
+                        />
+                        {errors.bbeTransaction && (
+                          <p className="text-sm text-red-500">
+                            {errors.bbeTransaction.message}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Row: Profit + Irregular Income */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Profit from Business Activity - No X button when Tax Residency = No */}
+                <div className="space-y-2">
+                  <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
+                    Profit from business activity (average monthly amount)
+                  </Label>
+                  <Controller
+                    name="profitFromBusiness"
+                    control={control}
+                    render={({ field }) => (
+                      <>
+                        <CustomSelect
+                          value={(() => {
+                            const found = amountRangeOptions.find(
+                              (opt) => opt.value === field.value
+                            );
+                            return found ? found : null;
+                          })()}
+                          onChange={(option: any) => {
+                            const selected = Array.isArray(option) ? option[0] : option;
+                            field.onChange(selected ? selected.value : "");
+                          }}
+                          options={amountRangeOptions}
+                          placeholder="R"
+                        />
+                        {errors.profitFromBusiness && (
+                          <p className="text-sm text-red-500">
+                            {errors.profitFromBusiness.message}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  />
+                </div>
+
+                {/* Irregular Income - No X button when Tax Residency = No */}
+                <div className="space-y-2">
+                  <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
                     Irregular income (average monthly amount)
                   </Label>
                   <Controller

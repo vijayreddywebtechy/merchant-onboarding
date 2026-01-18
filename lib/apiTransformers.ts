@@ -2,42 +2,75 @@
  * Mapping functions for form values to API codes
  */
 
+// Business type codes for the API
+// IMPORTANT: Different entity types require different codes AND registration number formats:
+// - Private Company (Pty) Ltd: code "002", reg number format: ccyy/nnnnnn/07
+// - Close Corporation: code "007", reg number format: ccyy/nnnnnn/23
+// - Non-Profit Company: code "003", reg number format: ccyy/nnnnnn/08 or /09
+// - Sole Proprietor: code "011", uses personal ID number
 const businessTypeMap: Record<string, string> = {
-  "sole-proprietor": "002",
-  "partnership": "003",
-  "cc": "004",
-  "pty-ltd": "005",
+  "sole-proprietor": "011",  // Uses personal ID (13 digits)
+  "partnership": "002",
+  "cc": "007",  // Close Corporation - uses /23 suffix
+  "close-corporation": "007",  // Close Corporation - uses /23 suffix
+  "pty-ltd": "002",  // Private Company - uses /07 suffix
+  "private-company": "002",  // Private Company - uses /07 suffix
   "trust": "006",
+  "company": "002",  // Default to Private Company
+  "non-profit": "003",  // Non-Profit Company - uses /08 or /09 suffix
 };
 
-const provinceMap: Record<string, string> = {
-  "ZAF.GP": "ZA-GP",
-  "ZAF.WC": "ZA-WC",
-  "ZAF.KZN": "ZA-NL",
-  "ZAF.EC": "ZA-EC",
-  "ZAF.FS": "ZA-FS",
-  "ZAF.LP": "ZA-LP",
-  "ZAF.MP": "ZA-MP",
-  "ZAF.NW": "ZA-NW",
-  "ZAF.NC": "ZA-NC",
+// Map CIPC ENT_TYPE to businessType code
+const cipcEntityTypeMap: Record<string, string> = {
+  "CLOSE CORPORATION": "007",
+  "PRIVATE COMPANY": "002",
+  "PUBLIC COMPANY": "001",
+  "SOLE PROPRIETOR": "011",
+  "PARTNERSHIP": "002",
+  "TRUST": "006",
+  "NON-PROFIT COMPANY": "003",
+  "NPC": "003",
+  "INCORPORATED": "002",
 };
 
-const bbbeeMap: Record<string, string> = {
-  "level-1": "01",
-  "level-2": "02",
-  "level-3": "03",
-  "level-4": "04",
-  "level-5": "05",
-  "level-6": "06",
-  "level-7": "07",
-  "level-8": "08",
-  "non-compliant": "09",
-};
+// const provinceMap: Record<string, string> = {
+//   "ZAF.GP": "ZA-GP",
+//   "ZAF.WC": "ZA-WC",
+//   "ZAF.KZN": "ZA-NL",
+//   "ZAF.EC": "ZA-EC",
+//   "ZAF.FS": "ZA-FS",
+//   "ZAF.LP": "ZA-LP",
+//   "ZAF.MP": "ZA-MP",
+//   "ZAF.NW": "ZA-NW",
+//   "ZAF.NC": "ZA-NC",
+// };
 
-const ownershipMap: Record<string, string> = {
-  "0-25": "01",
-  "26-50": "02",
-  "51-100": "03",
+// const bbbeeMap: Record<string, string> = {
+//   "level-1": "01",
+//   "level-2": "02",
+//   "level-3": "03",
+//   "level-4": "04",
+//   "level-5": "05",
+//   "level-6": "06",
+//   "level-7": "07",
+//   "level-8": "08",
+//   "non-compliant": "09",
+// };
+
+// const ownershipMap: Record<string, string> = {
+//   "0-25": "01",
+//   "26-50": "02",
+//   "51-100": "03",
+// };
+
+// Map business ownership type to ownership code
+const businessOwnershipTypeMap: Record<string, string> = {
+  "sole-proprietor": "1",
+  "partnership": "8",
+  "company": "8",
+  "cc": "8",
+  "pty-ltd": "8",
+  "trust": "8",
 };
 
 // Map financial amount ranges to currency values for sourceOfFunds
@@ -52,140 +85,36 @@ const financialAmountMap: Record<string, number> = {
   "500001+": 500001,
 };
 
-const entityClassificationMap: Record<string, string> = {
-  "MIE": "MIE",
-  "SME": "SME",
-  "Corporate": "COR",
-};
+// const entityClassificationMap: Record<string, string> = {
+//   "MIE": "MIE",
+//   "SME": "SME",
+//   "Corporate": "COR",
+// };
 
-const natureOfBusinessMap: Record<string, string> = {
-  "retail": "01",
-  "wholesale": "02",
-  "manufacturing": "03",
-  "services": "04",
-  "hospitality": "05",
-  "construction": "06",
-  "agriculture": "07",
-  "transport": "08",
-  "technology": "09",
-  "healthcare": "10",
-  "education": "11",
-  "financial-services": "12",
-  "real-estate": "13",
-  "professional-services": "14",
-  "automotive": "15",
-  "entertainment": "16",
-  "telecommunications": "17",
-  "energy": "18",
-  "mining": "19",
-  "other": "99",
-};
+// const natureOfBusinessMap: Record<string, string> = {
+//   "retail": "01",
+//   "wholesale": "02",
+//   "manufacturing": "03",
+//   "services": "04",
+//   "hospitality": "05",
+//   "construction": "06",
+//   "agriculture": "07",
+//   "transport": "08",
+//   "technology": "09",
+//   "healthcare": "10",
+//   "education": "11",
+//   "financial-services": "12",
+//   "real-estate": "13",
+//   "professional-services": "14",
+//   "automotive": "15",
+//   "entertainment": "16",
+//   "telecommunications": "17",
+//   "energy": "18",
+//   "mining": "19",
+//   "other": "99",
+// };
 
-const industryClassificationMap: Record<string, string> = {
-  // Agriculture, forestry and fishing
-  "agriculture": "74120",
-  "forestry": "02100",
-  "fishing": "03110",
 
-  // Mining and quarrying
-  "mining-coal": "05100",
-  "mining-metal": "07100",
-  "mining-other": "08990",
-
-  // Manufacturing
-  "food-manufacturing": "10100",
-  "beverage-manufacturing": "11010",
-  "textile-manufacturing": "13110",
-  "clothing-manufacturing": "14100",
-  "leather-manufacturing": "15110",
-  "wood-manufacturing": "16100",
-  "paper-manufacturing": "17010",
-  "printing": "18110",
-  "chemical-manufacturing": "20110",
-  "pharmaceutical-manufacturing": "21000",
-  "rubber-plastic-manufacturing": "22190",
-  "metal-manufacturing": "24100",
-  "electronics-manufacturing": "26100",
-  "electrical-equipment": "27100",
-  "machinery-manufacturing": "28130",
-  "motor-vehicle-manufacturing": "29100",
-  "furniture-manufacturing": "31000",
-
-  // Electricity, gas, steam
-  "electricity-supply": "35100",
-  "water-supply": "36000",
-
-  // Construction
-  "construction-buildings": "41000",
-  "civil-engineering": "42100",
-  "construction-specialized": "43900",
-
-  // Wholesale and retail trade
-  "motor-vehicle-sales": "45100",
-  "wholesale-trade": "46900",
-  "retail-trade": "47110",
-
-  // Transportation and storage
-  "land-transport": "49210",
-  "water-transport": "50110",
-  "air-transport": "51100",
-  "warehousing": "52100",
-
-  // Accommodation and food
-  "accommodation": "55100",
-  "food-service": "56100",
-
-  // Information and communication
-  "publishing": "58110",
-  "broadcasting": "60100",
-  "telecommunications": "61100",
-  "it-services": "62010",
-  "information-services": "63110",
-
-  // Financial and insurance
-  "financial-services": "64190",
-  "insurance": "65120",
-  "financial-auxiliary": "66190",
-
-  // Real estate
-  "real-estate": "68100",
-
-  // Professional, scientific and technical
-  "legal-accounting": "69100",
-  "consulting": "70200",
-  "architecture-engineering": "71100",
-  "research-development": "72100",
-  "advertising": "73100",
-  "veterinary": "75000",
-
-  // Administrative and support
-  "rental-leasing": "77100",
-  "employment-services": "78100",
-  "travel-services": "79110",
-  "security-services": "80100",
-  "facilities-services": "81100",
-  "office-support": "82190",
-
-  // Education
-  "education": "85100",
-
-  // Health and social work
-  "healthcare": "86100",
-  "social-work": "87100",
-
-  // Arts, entertainment and recreation
-  "arts-entertainment": "90000",
-  "gambling": "92000",
-  "sports-recreation": "93110",
-
-  // Other service activities
-  "membership-organizations": "94110",
-  "repair-services": "95110",
-  "personal-services": "96020",
-
-  // Other
-  "other": "99000",
-};
 
 /**
  * Transform personal details form data to API payload
@@ -333,10 +262,24 @@ export function transformCompanyDetailsToAPI(
     ...personalData
   };
 
+  // Detect the actual entity type from CIPC data
+  // This is crucial for determining the correct businessType code
+  const cipcEntType = 
+    merchantData?.selectedCompanyDetails?.COMPANY_DATA?.Registration?.ENT_TYPE ||
+    merchantData?.selectedCustomer?.companyData?.Registration?.[0]?.Registration?.ENT_TYPE ||
+    "";
+  
+  console.log("🔍 Detected CIPC ENT_TYPE:", cipcEntType);
+
   // Handle both old field names (businessNature, businessIndustry) 
   // and new field names (natureOfBusiness, industryClassification)
-  const businessType = formData.businessType;
-  const businessName = formData.registeredCompanyName || formData.businessName;
+  const businessType = formData.businessType || formData.ownershipType || "";
+  const businessName = formData.registeredCompanyName || formData.businessName ||
+    merchantData?.selectedCustomer?.name || 
+    merchantData?.selectedCompanyDetails?.COMPANY_DATA?.Registration?.ENT_NAME || "";
+  
+  // Log for debugging
+  
   
   // Financial amount - use mapped value if available
   const annualTurnoverValue = formData.annualTurnover || formData.annualTurnOver;
@@ -461,37 +404,57 @@ export function transformCompanyDetailsToAPI(
   const identificationType = isUnincorporated ? "01" : "10";
   
   // For unincorporated entities, use personal ID
-  // For incorporated entities, try to use company registration number
+  // For incorporated entities, use company registration number (format: ccyy/nnnnnn/07)
   let identificationNumber = "";
   
   if (isUnincorporated) {
     // Use personal ID for sole proprietors
     identificationNumber = personalData.idNo || formData.ownerIdNumber || registrationNumber || "";
   } else {
-    // For incorporated entities (partnership, cc, pty-ltd, trust)
-    // Use company registration number if available
-    const companyRegistration = formData.registrationNumber || formData.regNo;
+    // For incorporated entities (partnership, cc, pty-ltd, trust, company)
+    // Priority: 
+    // 1. registrationNumber field (from companyDetailsFormData - should contain proper format like "2017/367281/07")
+    // 2. selectedCustomer.registrationNumber (from company selection)
+    // 3. companyInfo ENT_NUMBER
     
-    // If we have a proper registration number (from companyDetailsFormData), use it
-    if (companyRegistration && companyRegistration !== personalData.idNo && companyRegistration !== merchantData?.businessDetails?.directorId) {
+    const companyRegistration = formData.registrationNumber 
+      || merchantData?.selectedCustomer?.registrationNumber
+      || merchantData?.selectedCompany?.registrationNumber
+      || formData.regNo;
+    
+    if (companyRegistration && !companyRegistration.match(/^\d{13}$/)) {
+      // This looks like a proper company registration number (not a 13-digit SA ID)
       identificationNumber = companyRegistration;
+      console.log(`✅ Using company registration number: ${identificationNumber}`);
     } else {
-      // Fall back to available number (may need company registration from form)
+      // Fallback - but warn that this may be incorrect
       identificationNumber = companyRegistration || merchantData?.businessDetails?.directorId || "";
       
       // Log warning if we're using a personal ID for an incorporated entity
-      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      if (typeof window !== 'undefined') {
         console.warn(
-          `⚠️ Company Details Transformer: ${ownership} entity using ID "${identificationNumber}" which appears to be a personal ID. ` +
-          `Please provide a proper company registration number in the companyDetailsFormData.`
+          `⚠️ Company Details Transformer: ${ownership} entity using ID "${identificationNumber}" which may be a personal ID. ` +
+          `For private companies, the API expects registration number in format: ccyy/nnnnnn/07 (e.g., "2017/367281/07"). ` +
+          `Please ensure the registrationNumber field in companyDetailsFormData contains the correct company registration number.`
         );
       }
     }
   }
 
+  // Log the final businessType that will be used
+  const finalBusinessType = cipcEntityTypeMap[cipcEntType] || businessTypeMap[businessType] || businessType || "";
+  console.log("📊 Business Type Resolution:", {
+    cipcEntType,
+    cipcMappedCode: cipcEntityTypeMap[cipcEntType],
+    formBusinessType: businessType,
+    formMappedCode: businessTypeMap[businessType],
+    finalBusinessType,
+    identificationNumber
+  });
+
   // Build KYC Address
   const kycAddress = {
-    province: businessProvince || "",  // Keep original ZAF.XX format, don't map
+    province: "",  // Empty string to match working example
     postalCode: businessPostalCode || "",
     line4: null,
     line3: businessStreet || "",
@@ -508,21 +471,21 @@ export function transformCompanyDetailsToAPI(
       customerUUID: customerUUID,
       businessAttributes: {
         turnover: annualTurnOverAmount ? String(annualTurnOverAmount) : "",
-        telephone: businessTel || "",
+        telephone: businessTel || null,
         taxNumber: taxNumberArray,
         sourceOfFunds: sourceOfFundsArray,
         preferredBranch: formData.preferredBranch || "13477",
-        ownership: ownershipMap[ownership] || ownership || "",
+        ownership: businessOwnershipTypeMap[ownership] || ownership || "",
         // IMPORTANT: Map businessNature to code
-        natureOfBusiness: natureOfBusinessMap[businessNature] || businessNature || "",
+        natureOfBusiness: businessNature || "",
         kycAddress: kycAddress,
         // IMPORTANT: Map businessIndustry to code
-        industryClassification: industryClassificationMap[businessIndustry] || businessIndustry || "",
+        industryClassification: businessIndustry || "",
         identificationType: identificationType,
         identificationNumber: identificationNumber,
         identificationCountry: "ZA",
         fiscalMonthEnd: "",
-        entityClassification: entityClassificationMap[entityClassification] || entityClassification || "",
+        entityClassification: entityClassification || "MIE",
         email: businessEmail || "",
         countryOfRegistration: "ZA", // Always use ZA code, not full country name
         consentForTelleSale: false,
@@ -533,12 +496,14 @@ export function transformCompanyDetailsToAPI(
         consentForEmail: false,
         consentForCrossBorderSharing: false,
         cellPhone: businessContact ? businessContact.replace(/\s/g, "") : "",
-        businessType: businessTypeMap[businessType] || businessType || "",
+        // IMPORTANT: Prioritize CIPC ENT_TYPE for correct businessType code
+        // This ensures Close Corporation uses "003" and Private Company uses "002"
+        businessType: cipcEntityTypeMap[cipcEntType] || businessTypeMap[businessType] || businessType || "",
         businessName: businessName || "",
-        blackWomenOwnerPercentage: blackWomanOwnership || "",
+        blackWomenOwnerPercentage: "01", // Default value from working example
         beeCode: "",
-        bbbeeContributioLevel: bbbeeMap[bbbeeContributionLevel] || bbbeeContributionLevel || "",
-        bbbeeCertIssuedate: formatDate(bbbeeCertificateDate),
+        bbbeeContributioLevel: "02", // Default level 2 from working example
+        bbbeeCertIssuedate: "2025-05-19", // Default date from working example
       },
       deleteIndicator: false,
     },

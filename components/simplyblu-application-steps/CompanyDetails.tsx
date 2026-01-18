@@ -17,12 +17,23 @@ import {
   cityOptions,
   businessNatureOptions,
   businessIndustryOptions,
-  orgOwnspTypeOptions
+  orgOwnspTypeOptions,
+  natureOfBusinessOptions
 } from "@/lib/data";
+
+// Business Type/Structure Options
+const businessTypeOptions = [
+  { value: 'sole-proprietor', label: 'Sole Proprietor' },
+  { value: 'partnership', label: 'Partnership' },
+  { value: 'cc', label: 'Close Corporation' },
+  { value: 'pty-ltd', label: 'Private Company (Pty) Ltd' },
+  { value: 'trust', label: 'Trust' },
+];
 
 type CompanyDetailsData = {
   registeredCompanyName: string;
   countryOfRegistration: string;
+  registrationNumber?: string; // Company registration number (e.g., "2017/367281/07")
   addressType: "same" | "different";
   addressSearch?: string;
   streetNumber?: string;
@@ -51,12 +62,12 @@ const cityTownOptions = [
   { value: 'durban', label: 'Durban' },
 ];
 
-// Preferred Branch options
+// Preferred Branch options - using branch codes as required by the API
 const preferredBranchOptions = [
-  { value: 'sandton', label: 'Sandton' },
-  { value: 'rosebank', label: 'Rosebank' },
-  { value: 'pretoria', label: 'Pretoria' },
-  { value: 'cape-town', label: 'Cape Town' },
+  { value: '13477', label: 'Sandton' },
+  { value: '13479', label: 'Rosebank' },
+  { value: '13481', label: 'Pretoria' },
+  { value: '13483', label: 'Cape Town' },
 ];
 
 // Ownership options
@@ -90,6 +101,7 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
     defaultValues: {
       registeredCompanyName: "",
       countryOfRegistration: "",
+      registrationNumber: "", // Company registration number
       addressType: "different",
       addressSearch: "",
       streetNumber: "",
@@ -119,18 +131,36 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
         const businessDetails = parsed.businessDetails;
         const companyInfo = parsed.selectedCompanyDetails?.COMPANY_DATA?.Registration;
         const selectedCompany = parsed.selectedCompany;
+        const selectedCustomer = parsed.selectedCustomer;
         const isSoleProprietor = parsed.isSoleProprietor;
         
         // Determine company name and address based on type
         const companyName = isSoleProprietor 
           ? businessDetails?.directorId || ""
-          : (companyInfo?.ENT_NAME || selectedCompany?.name || "");
-        console.log("Prefilling company details with:", parsed, companyName, companyInfo);
+          : (companyInfo?.ENT_NAME || selectedCompany?.name || selectedCustomer?.name || "");
+        
+        // Get company registration number for incorporated entities
+        // Format should be like: "2017/367281/07"
+        const companyRegistrationNumber = !isSoleProprietor 
+          ? (selectedCustomer?.registrationNumber || 
+             selectedCompany?.registrationNumber || 
+             companyInfo?.ENT_NUMBER || 
+             "")
+          : "";
+          
+        console.log("Prefilling company details with:", {
+          companyName,
+          registrationNumber: companyRegistrationNumber,
+          isSoleProprietor,
+          selectedCustomer,
+          selectedCompany
+        });
         const address = companyInfo || {};
         
         reset({
           registeredCompanyName: companyName,
           countryOfRegistration: "South Africa",
+          registrationNumber: companyRegistrationNumber, // Company registration number
           addressType: "different",
           addressSearch: "",
           streetNumber: address.PHYS_ADDR_1 || "",
@@ -230,17 +260,22 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
     }
 
     localStorage.setItem("companyDetailsFormData", JSON.stringify(finalData));
+      const merchantData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
 
     // Get preApplicationResponse data
     const preApplicationResponse = JSON.parse(
       localStorage.getItem("preApplicationResponse") || "{}"
     );
-    const inflightCustomerDataID = preApplicationResponse.inflightCustomerDataId || "MyMo Biz Account";
-    const customerUUID = preApplicationResponse.initiators?.[0]?.initiatorBPGUID || "temp-uuid";
+    // Replace spaces with hyphens to avoid URL encoding issues
+    const inflightCustomerDataID = (merchantData.preApplicationResponse.inflightCustomerDataId || "MyMo Biz Account").replace(/\s+/g, "-");
+    const customerUUID = merchantData.preApplicationResponse.businessBPGUID;
 
     // Transform form data to API payload
     const payload = transformCompanyDetailsToAPI(
-      finalData,
+      {
+        ...finalData,
+        businessType: finalData.ownership, // Map ownership to businessType
+      },
       inflightCustomerDataID,
       customerUUID
     );
@@ -564,14 +599,14 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
                 render={({ field }) => (
                   <CustomSelect
                     value={(() => {
-                      const found = businessNatureOptions.find(opt => opt.value === field.value);
+                      const found = natureOfBusinessOptions.find(opt => opt.value === field.value);
                       return found ? found : null;
                     })()}
                     onChange={(option) => {
                       const selected = Array.isArray(option) ? option[0] : option;
                       field.onChange(selected ? selected.value : "");
                     }}
-                    options={businessNatureOptions}
+                    options={natureOfBusinessOptions}
                     placeholder="Please select"
                   />
                 )}

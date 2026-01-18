@@ -4,11 +4,16 @@ import Link from "next/link";
 import Image from "next/image";
 import standartbankLogo from "@/assets/sb-logo.png";
 import React from "react";
+import { useRouter } from "next/navigation";
 
 const Header: React.FC = () => {
+  const router = useRouter();
+
   const handleExit = (): void => {
-    // TODO: add exit / logout logic
-    console.log("Exit clicked");
+    // Clear all application data from localStorage
+    localStorage.clear();
+    // Redirect to account onboarding page
+    router.push("/account-onboarding?prodId=ZPOS&prOpt=ZSIB");
   };
 
   return (

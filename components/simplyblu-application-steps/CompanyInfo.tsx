@@ -20,7 +20,6 @@ const COMPANY_STEPS = [
   { id: 1, name: "Financial Info", component: CompanyFinancialInfo },
   { id: 2, name: "Marketing Consent", component: MarketingConsentForm },
   { id: 3, name: "Banking Details", component: CompanyBankingDetails },
-  { id: 4, name: "Delivery Details", component: DeliveryDetails },
 ];
 
 function CompanyInfo({ onNext, onBack }: CompanyInfoProps) {
