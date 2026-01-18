@@ -304,11 +304,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
         return;
       }
 
-      if (!contractDocumentId) {
-        alert("Contract document not found. Please refresh and try again.");
-        setIsLoadingDocument(false);
-        return;
-      }
+      
 
       console.log("Retrieving document with contentId:", contractDocumentId);
 
@@ -439,7 +435,6 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
       
       // Build pricing conditions - empty array for now
       const pricCond: any[] = [];
-      setOpen(true);
 
       // Build items array based on selection
       const items = [];
@@ -539,36 +534,36 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
       console.log("Offer ID being used:", digitalOfferPayload.offerId);
 
       // STEP 1: Submit digital offer FIRST
-      await new Promise<void>((resolve, reject) => {
-        setDigitalOffer(
-          {
-            body: digitalOfferPayload,
-          },
-          {
-            onSuccess: (res) => {
-              console.log("Digital offer submitted successfully:", res);
-              resolve();
-            },
-            onError: (error: any) => {
-              console.error("Error submitting digital offer:", error);
+      // await new Promise<void>((resolve, reject) => {
+      //   setDigitalOffer(
+      //     {
+      //       body: digitalOfferPayload,
+      //     },
+      //     {
+      //       onSuccess: (res) => {
+      //         console.log("Digital offer submitted successfully:", res);
+      //         resolve();
+      //       },
+      //       onError: (error: any) => {
+      //         console.error("Error submitting digital offer:", error);
               
-              const errorData = error.response?.data;
-              let errorMessage = "Failed to submit digital offer. Please try again.";
-              if (errorData?.detail) {
-                errorMessage = errorData.detail;
-                if (errorMessage.includes("not in draft status")) {
-                  errorMessage = "This offer has already been processed and cannot be modified.";
-                }
-              } else if (errorData?.error) {
-                errorMessage = errorData.error;
-              } else if (error.message) {
-                errorMessage = error.message;
-              }
-              reject(new Error(errorMessage));
-            },
-          }
-        );
-      });
+      //         const errorData = error.response?.data;
+      //         let errorMessage = "Failed to submit digital offer. Please try again.";
+      //         if (errorData?.detail) {
+      //           errorMessage = errorData.detail;
+      //           if (errorMessage.includes("not in draft status")) {
+      //             errorMessage = "This offer has already been processed and cannot be modified.";
+      //           }
+      //         } else if (errorData?.error) {
+      //           errorMessage = errorData.error;
+      //         } else if (error.message) {
+      //           errorMessage = error.message;
+      //         }
+      //         reject(new Error(errorMessage));
+      //       },
+      //     }
+      //   );
+      // });
 
       console.log("Digital offer submitted, now creating contract...");
 
@@ -610,8 +605,11 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
                   ...preApplicationResponse,
                   contractDocumentId: contractDoc.documentId
                 };
+                
                 localStorage.setItem("merchantOnboardingData", JSON.stringify(updatedResponse));
               }
+              setOpen(true);
+
               resolve();
             },
             onError: (error) => {

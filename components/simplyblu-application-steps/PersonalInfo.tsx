@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Info, Search } from "lucide-react";
 import { useCustomMutation } from "@/hooks/useCustomMutation";
 import { transformPersonalDetailsToAPI } from "@/lib/apiTransformers";
-import { provinceOptions, cityOptions, nationalityOptions, countryOptions } from "@/lib/data";
+import { provinceOptions, nationalityOptions, countryOptions } from "@/lib/data";
 
 // Validation Schema
 const personalInfoSchema: yup.ObjectSchema<PersonalInfoFormData> = yup
@@ -76,7 +76,7 @@ const personalInfoSchema: yup.ObjectSchema<PersonalInfoFormData> = yup
       .trim()
       .required("Suburb name is required"),
 
-    city: yup.string().required("Please select a city/town"),
+    city: yup.string().required("City/town is required"),
 
     province: yup.string().required("Please select a province"),
 
@@ -114,14 +114,7 @@ interface PersonalInfoProps {
   onBack?: () => void;
 }
 
-// City/Town options for CustomSelect
-const cityTownOptions = [
-  { value: "johannesburg", label: "Johannesburg" },
-  { value: "pretoria", label: "Pretoria" },
-  { value: "cape-town", label: "Cape Town" },
-  { value: "durban", label: "Durban" },
-  { value: "port-elizabeth", label: "Port Elizabeth" },
-];
+
 
 function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -700,31 +693,25 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="city">City/town</Label>
-              <Controller
-                name="city"
-                control={control}
-                render={({ field }) => (
-                  <CustomSelect
-                    value={cityTownOptions.find(
-                      (opt) => opt.value === field.value
-                    ) || null}
-                    onChange={(option) => {
-                      const selected = Array.isArray(option)
-                        ? option[0]
-                        : option;
-                      field.onChange(selected ? selected.value : "");
-                    }}
-                    options={cityTownOptions}
-                    placeholder="Please select"
-                  />
+              <div className="space-y-2">
+                <Label htmlFor="city">City/town</Label>
+                <Controller
+                  name="city"
+                  control={control}
+                  render={({ field }) => (
+                    <Input
+                      type="text"
+                      id="city"
+                      {...field}
+                      placeholder="e.g Johannesburg"
+                      className={errors.city ? "border-red-500" : ""}
+                    />
+                  )}
+                />
+                {errors.city && (
+                  <p className="text-red-500 text-sm">{errors.city?.message as string}</p>
                 )}
-              />
-              {errors.city && (
-                <p className="text-red-500 text-sm">{errors.city?.message as string}</p>
-              )}
-            </div>
+              </div>
           </div>
           {/* Postal Code */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">

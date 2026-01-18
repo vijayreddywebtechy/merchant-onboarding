@@ -14,7 +14,6 @@ import { useCustomMutation } from "@/hooks/useCustomMutation";
 import { transformCompanyDetailsToAPI } from "@/lib/apiTransformers";
 import {
   provinceOptions,
-  cityOptions,
   businessNatureOptions,
   businessIndustryOptions,
   orgOwnspTypeOptions,
@@ -54,13 +53,7 @@ interface CompanyDetailsProps {
   onBack?: () => void;
 }
 
-// City/Town options for CustomSelect
-const cityTownOptions = [
-  { value: 'johannesburg', label: 'Johannesburg' },
-  { value: 'pretoria', label: 'Pretoria' },
-  { value: 'cape-town', label: 'Cape Town' },
-  { value: 'durban', label: 'Durban' },
-];
+
 
 // Preferred Branch options - using branch codes as required by the API
 const preferredBranchOptions = [
@@ -544,17 +537,12 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
                     name="cityTown"
                     control={control}
                     render={({ field }) => (
-                      <CustomSelect
-                        value={(() => {
-                          const found = cityTownOptions.find(opt => opt.value === field.value);
-                          return found ? found : null;
-                        })()}
-                        onChange={(option) => {
-                          const selected = Array.isArray(option) ? option[0] : option;
-                          field.onChange(selected ? selected.value : "");
-                        }}
-                        options={cityTownOptions}
-                        placeholder="Please select"
+                      <Input
+                        type="text"
+                        id="cityTown"
+                        {...field}
+                        placeholder="e.g Johannesburg"
+                        className={errors.cityTown ? "border-red-500" : ""}
                       />
                     )}
                   />

@@ -212,6 +212,48 @@ const ContractSigningOTP: React.FC = () => {
         
         // Clear pending sign flag
         localStorage.removeItem("contractPendingSign");
+
+        // Call application update APIs
+        try {
+           const merchantData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+           const processId = merchantData?.preApplicationResponse?.processId;
+           
+           if (processId) {
+               console.log("Updating application status steps for processId:", processId);
+               
+               const token = localStorage.getItem("accessToken");
+               const authToken = token ? `Bearer ${token}` : '';
+
+               // Step 1: Initial Process Update
+               await fetch('/api/process-application', {
+                   method: 'POST',
+                   headers: { 
+                       'Content-Type': 'application/json',
+                       'Authorization': authToken
+                   },
+                   body: JSON.stringify({ processIdentifier: processId })
+               });
+
+               // Step 2: Facial Recognition Success Update
+               await fetch('/api/process-application', {
+                   method: 'POST',
+                   headers: { 
+                       'Content-Type': 'application/json',
+                       'Authorization': authToken
+                   },
+                   body: JSON.stringify({ 
+                       webFacialRecognitionStatus: "SUCCESS",
+                       webFacialRecognitionRetryAllowed: null,
+                       webFacialRecognitionFailureReason: null,
+                       taskIdentifier: null, 
+                       processIdentifier: processId
+                   })
+               });
+               console.log("Application status updated successfully");
+           }
+        } catch (error) {
+            console.error("Error updating application status:", error);
+        }
         
         setOtpMessage("OTP verified successfully! Contract signed.");
         

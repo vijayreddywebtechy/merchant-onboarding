@@ -114,7 +114,7 @@ export const bankingDetailsSchema = yup.object().shape({
     .string()
     .trim()
     .required("Branch code is required")
-    .matches(/^[0-9]{6}$/, "Branch code must be 6 digits"),
+    .matches(/^[0-9]{5,7}$/, "Branch code must be 5-7 digits"),
 });
 
 // Delivery Details Schema
