@@ -5,6 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import CustomSelect from "@/components/dynamic/CustomSelect";
+import { StepFooter } from "@/components/dynamic/StepFooter";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -261,20 +262,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
     return () => subscription.unsubscribe();
   }, [watch]);
 
-  // Expose validation through window object for Stepper to call
-  React.useEffect(() => {
-    (window as any).__personalInfoValidate = async () => {
-      const isValid = await new Promise<boolean>((resolve) => {
-        handleSubmit(
-          () => {
-            resolve(true);
-          },
-          () => resolve(false)
-        )();
-      });
-      return isValid;
-    };
-  }, [trigger, handleSubmit]);
+
 
   const handleAddressSearch = (): void => {
     console.log("Searching for address");
@@ -732,7 +720,13 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
             </div>
           </div>
 
-          {/* Form is hidden, navigation handled by Stepper */}
+          {/* Form navigation buttons */}
+          <StepFooter 
+            onBack={onBack} 
+            isLoading={isSubmitting} 
+            isBackDisabled={!onBack}
+            nextLabel="Next Step"
+          />
         </div>
       </div>
     </form>

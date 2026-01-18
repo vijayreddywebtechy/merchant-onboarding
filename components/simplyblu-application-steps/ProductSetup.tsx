@@ -16,6 +16,7 @@ import aeRcs from "@/assets/images/general/ae_rcs.png";
 import recieptIcon from "@/assets/images/icons/icn_reciept.png";
 import Link from "next/link";
 import { Info, CheckCircle2 } from "lucide-react";
+import { StepFooter } from "@/components/dynamic/StepFooter";
 
 interface CardMachineSelectionData {
   // Common
@@ -319,7 +320,7 @@ const ProductSetup = ({ onNext, onBack }: ProductSetupProps) => {
   // 1. Merchant App Layout
   if (isMerchantApp) {
     return (
-      <div className="py-6 md:py-8">
+      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="py-6 md:py-8">
         <div className="w-full max-w-5xl mx-auto">
           <div className="text-center mb-8 md:mb-12">
             <h2 className="text-2xl md:text-3xl font-medium text-gray-700 mb-2">Product setup</h2>
@@ -386,23 +387,20 @@ const ProductSetup = ({ onNext, onBack }: ProductSetupProps) => {
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-3 mt-12 mb-8">
-            <Button variant="outline" className="w-full md:max-w-[160px] border-blue-600 text-blue-600 hover:bg-blue-50" onClick={onBack}>BACK</Button>
-            <Button className="w-full md:max-w-[160px] bg-blue-600 hover:bg-blue-700" onClick={handleSubmit}>NEXT</Button>
-          </div>
+          <StepFooter onBack={onBack} />
           
           <div className="flex justify-end">
             <Button variant="ghost" className="bg-green-700 hover:bg-green-800 text-white rounded-full px-8 py-2 h-auto text-sm font-medium">Save for later</Button>
           </div>
         </div>
-      </div>
+      </form>
     );
   }
 
   // 2. Takealot Layout
   if (isTakelot) {
     return (
-      <div className="py-6 md:py-8">
+      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="py-6 md:py-8">
         <div className="w-full max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8 md:mb-16 max-w-xl mx-auto">
@@ -583,21 +581,18 @@ const ProductSetup = ({ onNext, onBack }: ProductSetupProps) => {
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-3 !mt-12">
-              <Button variant="outline" className="w-full md:max-w-40" onClick={onBack}>BACK</Button>
-              <Button className="w-full md:max-w-40" onClick={handleSubmit}>NEXT</Button>
-            </div>
+            <StepFooter onBack={onBack} />
           </div>
         </div>
       </div>
-     </div>
+      </form>
     );
   }
 
   // 3. Default: Rent Layout
   // This is the restored Rent flow layout
   return (
-    <div className="py-6 md:py-8">
+    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="py-6 md:py-8">
       <div className="w-full max-w-6xl mx-auto">
         <div className="text-center mb-8 md:mb-16 max-w-xl mx-auto">
           <h2 className="text-xl md:text-2xl lg:text-3xl font-medium text-gray-700 mb-3">Product setup</h2>
@@ -813,18 +808,11 @@ const ProductSetup = ({ onNext, onBack }: ProductSetupProps) => {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 mt-8 pt-6 border-t border-gray-200">
-              {onBack && (
-                <Button variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10 w-full sm:w-auto" onClick={onBack}>BACK</Button>
-              )}
-              {onNext && (
-                <Button variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10 w-full sm:w-auto ml-auto" onClick={handleSubmit}>NEXT</Button>
-              )}
-            </div>
+            <StepFooter onBack={onBack} />
           </div>
         </div>
       </div>
-    </div>
+    </form>
   );
 };
 

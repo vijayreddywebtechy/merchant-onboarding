@@ -11,6 +11,7 @@ import { marketingConsentSchema } from "@/lib/validationSchemas";
 import { useCustomMutation } from "@/hooks/useCustomMutation";
 import { updateCompanyDetailsWithConsent, buildRelatedPartiesUpdatePayload } from "@/lib/apiTransformers";
 import axios from "axios";
+import { StepFooter } from "@/components/dynamic/StepFooter";
 
 type MarketingConsentData = {
   smsConsent: string;
@@ -154,18 +155,7 @@ const MarketingConsentForm = ({ onNext, onBack }: Props) => {
     return () => subscription.unsubscribe();
   }, [watch]);
 
-  // Expose validation through window object for Stepper to call
-  useEffect(() => {
-    (window as any).__marketingConsentValidate = async () => {
-      const isValid = await new Promise<boolean>((resolve) => {
-        handleSubmit(
-          () => resolve(true),
-          () => resolve(false)
-        )();
-      });
-      return isValid;
-    };
-  }, [handleSubmit]);
+
 
   const handleFormSubmit = async (data: MarketingConsentData) => {
     setIsLoading(true);
@@ -219,7 +209,7 @@ const MarketingConsentForm = ({ onNext, onBack }: Props) => {
   };
 
   return (
-    <div className="py-6 md:py-8">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="py-6 md:py-8">
       <div className="w-full max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8 md:mb-10">
@@ -383,31 +373,12 @@ const MarketingConsentForm = ({ onNext, onBack }: Props) => {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-3 !mt-12">
-          <Button 
-            variant="outline" 
-            className="w-full md:max-w-40" 
-            onClick={onBack} 
-            disabled={isLoading}
-          >
-            Back
-          </Button>
-          <Button 
-            className="w-full md:max-w-40" 
-            onClick={async () => {
-              const isValid = await (window as any).__marketingConsentValidate?.();
-              if (isValid) {
-                const formData = watch();
-                handleFormSubmit(formData);
-              }
-            }}
-            disabled={isLoading}
-          >
-            {isLoading ? "Processing..." : "Next"}
-          </Button>
-        </div>
+        <StepFooter 
+          onBack={onBack}
+          isLoading={isLoading}
+        />
       </div>
-    </div>
+    </form>
   );
 };
 

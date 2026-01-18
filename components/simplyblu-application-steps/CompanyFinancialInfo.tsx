@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { Info, XCircle, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StepFooter } from "@/components/dynamic/StepFooter";
 import { companyFinancialInfoSchema } from "@/lib/validationSchemas";
 import { amountRangeOptions } from "@/lib/data_copy";
 import { entClassifOptions, countryOptions, sourcOfFundsOptions, taxTypeOptions } from "@/lib/data";
@@ -189,27 +190,10 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
     return () => subscription.unsubscribe();
   }, [watch]);
 
-  // Expose validation through window object for Stepper to call
-  useEffect(() => {
-    (window as any).__companyFinancialInfoValidate = async () => {
-      const isValid = await new Promise<boolean>((resolve) => {
-        handleSubmit(
-          () => {
-            console.log("CompanyFinancialInfo: Validation passed");
-            resolve(true);
-          },
-          (errors) => {
-            console.log("CompanyFinancialInfo: Validation failed", errors);
-            resolve(false);
-          }
-        )();
-      });
-      return isValid;
-    };
-  }, [handleSubmit]);
+
 
   return (
-    <div className="py-6 md:py-8">
+    <form onSubmit={handleSubmit(() => { if (onNext) onNext(); })} className="py-6 md:py-8">
       <div className="text-center mb-8 md:mb-10">
         <h2 className="text-xl md:text-2xl lg:text-3xl font-medium text-gray-700 mb-3">
           Company financial details
@@ -951,23 +935,12 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
 
         </div>
 
-        <div className="flex flex-col md:flex-row gap-3 !mt-12">
-          <Button variant="outline" className="w-full md:max-w-40" onClick={onBack}>
-            Back
-          </Button>
-          <Button 
-            className="w-full md:max-w-40" 
-            onClick={async () => {
-              const isValid = await (window as any).__companyFinancialInfoValidate?.();
-              if (isValid && onNext) onNext();
-            }}
-            disabled={isValidating}
-          >
-            {isValidating ? "Validating..." : "Next"}
-          </Button>
-        </div>
+        <StepFooter 
+          onBack={onBack}
+          isLoading={isValidating}
+        />
       </div>
-    </div>
+    </form>
   );
 }
 

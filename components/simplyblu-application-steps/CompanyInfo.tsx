@@ -5,9 +5,7 @@ import CompanyDetails from "./CompanyDetails";
 import CompanyFinancialInfo from "./CompanyFinancialInfo";
 import MarketingConsentForm from "./MarketingConsentForm";
 import CompanyBankingDetails from "./CompanyBankingDetails";
-import DeliveryDetails from "./DeliveryDetails";
-import CardMachineSummary from "./CardMachineSummary";
-import AcceptOffer from "./AcceptOffer";
+
 
 interface CompanyInfoProps {
   onNext?: () => Promise<void>;
@@ -25,13 +23,7 @@ const COMPANY_STEPS = [
 function CompanyInfo({ onNext, onBack }: CompanyInfoProps) {
   const [currentSubStep, setCurrentSubStep] = useState(0);
 
-  // Notify parent when substep changes
-  React.useEffect(() => {
-    const event = new CustomEvent('companyInfoSubStepChange', { 
-      detail: { isLastSubStep: currentSubStep === COMPANY_STEPS.length - 1 } 
-    });
-    window.dispatchEvent(event);
-  }, [currentSubStep]);
+
 
   const handleSubStepNext = async () => {
     if (currentSubStep < COMPANY_STEPS.length - 1) {

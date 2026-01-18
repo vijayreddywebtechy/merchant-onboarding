@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import { House, Search } from 'lucide-react';
 import { deliveryDetailsSchema } from '@/lib/validationSchemas';
+import { StepFooter } from "@/components/dynamic/StepFooter";
 
 type DeliveryDetailsData = {
   deliveryLocation: 'company' | 'residential' | 'new';
@@ -98,21 +99,10 @@ export default function DeliveryDetails({ onNext, onBack }: Props) {
     return () => subscription.unsubscribe();
   }, [watch]);
 
-  // Expose validation through window object for Stepper to call
-  useEffect(() => {
-    (window as any).__deliveryDetailsValidate = async () => {
-      const isValid = await new Promise<boolean>((resolve) => {
-        handleSubmit(
-          () => resolve(true),
-          () => resolve(false)
-        )();
-      });
-      return isValid;
-    };
-  }, [handleSubmit]);
+
 
   return (
-    <div className="py-6 md:py-8">
+    <form onSubmit={handleSubmit((data) => { if (onNext) onNext(); })} className="py-6 md:py-8">
       <div className="w-full max-w-4xl mx-auto">
         {/* Header */}
 
@@ -537,22 +527,11 @@ export default function DeliveryDetails({ onNext, onBack }: Props) {
           </p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-3 !mt-12">
-          <Button variant="outline" className="w-full md:max-w-40" onClick={onBack} disabled={isValidating}>
-            Back
-          </Button>
-          <Button 
-            className="w-full md:max-w-40" 
-            onClick={async () => {
-              const isValid = await (window as any).__deliveryDetailsValidate?.();
-              if (isValid && onNext) onNext();
-            }}
-            disabled={isValidating}
-          >
-            {isValidating ? "Validating..." : "Next"}
-          </Button>
-        </div>
+        <StepFooter 
+          onBack={onBack}
+          isLoading={isValidating}
+        />
       </div>
-    </div>
+    </form>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { StepFooter } from "@/components/dynamic/StepFooter";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useCustomMutation } from "@/hooks/useCustomMutation";
@@ -81,7 +82,7 @@ const AcceptOffer = ({ onNext, onBack }: AcceptOfferProps) => {
   };
 
   return (
-    <div className="py-6 md:py-8">
+    <form onSubmit={(e) => { e.preventDefault(); handleAcceptOffer(); }} className="py-6 md:py-8">
       {/* Header */}
       <div className="text-center mb-8 md:mb-10">
         <h2 className="text-xl md:text-2xl lg:text-3xl font-medium text-gray-700 mb-3">
@@ -178,28 +179,14 @@ const AcceptOffer = ({ onNext, onBack }: AcceptOfferProps) => {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col md:flex-row gap-3 !mt-12">
-          {onBack && (
-            <Button
-              variant="outline"
-              className="w-full md:max-w-40"
-              onClick={onBack}
-              type="button"
-              disabled={isLoading}
-            >
-              Back
-            </Button>
-          )}
-          <Button
-            className="w-full md:max-w-40 ml-auto"
-            onClick={handleAcceptOffer}
-            disabled={!termsAccepted || isLoading}
-          >
-            {isLoading ? "Processing..." : "Accept Offer"}
-          </Button>
-        </div>
+        <StepFooter 
+          onBack={onBack}
+          nextLabel="Accept Offer"
+          isLoading={isLoading}
+          isNextDisabled={!termsAccepted}
+        />
       </div>
-    </div>
+    </form>
   );
 };
 

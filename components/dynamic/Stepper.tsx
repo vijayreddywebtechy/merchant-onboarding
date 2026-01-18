@@ -73,69 +73,59 @@ interface StepperProps {
 
 export function Stepper({ steps, currentStep, onStepChange, onNext, onBack }: StepperProps) {
   const [isLoading, setIsLoading] = React.useState(false);
-  const [showCompanyInfoNavigation, setShowCompanyInfoNavigation] = React.useState(false);
 
-  // Listen for CompanyInfo substep changes
-  React.useEffect(() => {
-    const handleSubStepChange = (event: any) => {
-      setShowCompanyInfoNavigation(event.detail.isLastSubStep);
-    };
+  const handleNext = async (data?: any) => {
+    // If the parent provided an onNext handler, call it first
+    if (onNext) {
+      setIsLoading(true);
+      try {
+        const shouldProceed = await Promise.resolve(onNext());
+        if (!shouldProceed) return;
+      } catch (error) {
+        console.error("Error in onNext handler:", error);
+        return;
+      } finally {
+        setIsLoading(false);
+      }
+    }
     
-    window.addEventListener('companyInfoSubStepChange', handleSubStepChange);
-    return () => window.removeEventListener('companyInfoSubStepChange', handleSubStepChange);
-  }, []);
-
-  const handleNext = async () => {
-    setIsLoading(true);
-    try {
-      // Map step index to validation function names
-      const validationFunctions: { [key: number]: string } = {
-        0: "__personalInfoValidate",
-        1: "__companyDetailsValidate",
-        2: "__companyFinancialInfoValidate",
-        3: "__marketingConsentValidate",
-        4: "__bankingDetailsValidate",
-        5: "__deliveryDetailsValidate",
-        6: "__cardMachineSummaryValidate",
-      };
-
-      const validateFn = (window as any)[validationFunctions[currentStep]];
-      if (validateFn) {
-        const isValid = await validateFn();
-        if (!isValid) {
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      if (onNext) {
-        const isValid = await Promise.resolve(onNext());
-        if (isValid) {
-          onStepChange(currentStep + 1);
-        }
-      } else {
-        onStepChange(currentStep + 1);
-      }
-    } finally {
-      setIsLoading(false);
+    // Advance to the next step
+    if (currentStep < steps.length - 1) {
+      onStepChange(currentStep + 1);
     }
   };
 
   const handleBack = async () => {
+    // If the parent provided an onBack handler, call it first
     if (onBack) {
-      setIsLoading(true);
+       setIsLoading(true);
       try {
-        const isValid = await Promise.resolve(onBack());
-        if (isValid) {
-          onStepChange(currentStep - 1);
-        }
+        const shouldGoBack = await Promise.resolve(onBack());
+        if (!shouldGoBack) return;
+      } catch (error) {
+        console.error("Error in onBack handler:", error);
+        return;
       } finally {
         setIsLoading(false);
       }
-    } else {
+    }
+
+    // Go back to the previous step
+    if (currentStep > 0) {
       onStepChange(currentStep - 1);
     }
   };
+
+  const activeStepContent = steps[currentStep]?.content;
+
+  // Clone the active step content to inject props
+  const contentWithProps = React.isValidElement(activeStepContent)
+    ? React.cloneElement(activeStepContent as React.ReactElement<any>, {
+        onNext: handleNext,
+        onBack: currentStep > 0 ? handleBack : undefined,
+        isLastStep: currentStep === steps.length - 1,
+      })
+    : activeStepContent;
 
   return (
     <div className="w-full">
@@ -158,28 +148,7 @@ export function Stepper({ steps, currentStep, onStepChange, onNext, onBack }: St
       </div>
 
       {/* Current Step Content */}
-      <div className="my-8 min-h-[300px]">{steps[currentStep]?.content}</div>
-
-      {/* Navigation Buttons - Show in 2nd step only when on last substep */}
-      {(currentStep !== 1 || showCompanyInfoNavigation) && (
-        <div className="flex justify-between items-center pt-6 border-t">
-          <Button
-            size="md"
-            variant="outline"
-            onClick={handleBack}
-            disabled={currentStep === 0 || isLoading}
-          >
-            Back
-          </Button>
-          <Button
-            size="md"
-            onClick={handleNext}
-            disabled={currentStep === steps.length - 1 || isLoading}
-          >
-            {isLoading ? "Loading..." : currentStep === steps.length - 1 ? "Finish" : "Next Step"}
-          </Button>
-        </div>
-      )}
+      <div className="my-8 min-h-[300px]">{contentWithProps}</div>
     </div>
   );
 }

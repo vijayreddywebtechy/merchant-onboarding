@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Info, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StepFooter } from "@/components/dynamic/StepFooter";
 import { bankingDetailsSchema } from "@/lib/validationSchemas";
 import { merchantCommissionRates, bankNamesOptions, getBranchesForBank } from "@/lib/data";
 
@@ -79,7 +80,7 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     control,
     watch,
     reset,
@@ -263,18 +264,7 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
     return () => subscription.unsubscribe();
   }, [watch]);
 
-  // Expose validation through window object for Stepper to call
-  useEffect(() => {
-    (window as any).__bankingDetailsValidate = async () => {
-      const isValid = await new Promise<boolean>((resolve) => {
-        handleSubmit(
-          () => resolve(true),
-          () => resolve(false)
-        )();
-      });
-      return isValid;
-    };
-  }, [handleSubmit]);
+
 
   const estimatedTurnoverValue = watch("estimatedTurnover");
   const selectedBankName = watch("bankName");
@@ -447,7 +437,7 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
   };
 
   return (
-    <div className="py-6 md:py-8">
+    <form onSubmit={handleSubmit(async (data) => { if (onNext) await onNext(data); })} className="py-6 md:py-8">
       <div className="w-full max-w-6xl mx-auto">
         {/* Header */}
 
@@ -789,28 +779,12 @@ const CompanyBankingDetails = ({ onNext, onBack }: CompanyBankingDetailsProps) =
             )}
           </div>
         </div>
-        <div className="flex flex-col md:flex-row gap-3 !mt-12">
-          {onBack && (
-            <Button variant="outline" className="w-full md:max-w-40" onClick={onBack} type="button">
-              Back
-            </Button>
-          )}
-          <Button
-            className="w-full md:max-w-40 ml-auto"
-            onClick={async () => {
-              const isValid = await (window as any).__bankingDetailsValidate?.();
-              if (isValid && onNext) {
-                const data = localStorage.getItem("companyBankingDetailsFormData");
-                if (data) await onNext(JSON.parse(data));
-              }
-            }}
-            type="button"
-          >
-            Next
-          </Button>
-        </div>
+        <StepFooter 
+          onBack={onBack}
+          isLoading={isSubmitting}
+        />
       </div>
-    </div>
+    </form>
   );
 };
 

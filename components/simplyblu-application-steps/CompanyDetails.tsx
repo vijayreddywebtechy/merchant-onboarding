@@ -11,6 +11,7 @@ import { Info, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { companyDetailsSchema } from "@/lib/validationSchemas";
 import { useCustomMutation } from "@/hooks/useCustomMutation";
+import { StepFooter } from "@/components/dynamic/StepFooter";
 import { transformCompanyDetailsToAPI } from "@/lib/apiTransformers";
 import {
   provinceOptions,
@@ -221,18 +222,7 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
     }
   }, [residentialAddress, watch]);
 
-  // Expose validation through window object for Stepper to call
-  useEffect(() => {
-    (window as any).__companyDetailsValidate = async () => {
-      const isValid = await new Promise<boolean>((resolve) => {
-        handleSubmit(
-          () => resolve(true),
-          () => resolve(false)
-        )();
-      });
-      return isValid;
-    };
-  }, [handleSubmit]);
+
 
   const onSubmit = async (data: any) => {
     setIsSubmitting(true);
@@ -742,14 +732,10 @@ function CompanyDetails({ onNext, onBack }: CompanyDetailsProps) {
             </div>
           </div>
         </div>
-        <div className="flex flex-col md:flex-row gap-3 !mt-12">
-            {onBack && (
-              <Button variant="outline" className="w-full md:max-w-40" onClick={onBack} type="button">
-                Back
-              </Button>
-            )}
-            <Button className="w-full md:max-w-40 ml-auto" type="submit">Next</Button>
-        </div>
+        <StepFooter 
+          onBack={onBack}
+          isLoading={isSubmitting}
+        />
       </div>
     </form>
   );

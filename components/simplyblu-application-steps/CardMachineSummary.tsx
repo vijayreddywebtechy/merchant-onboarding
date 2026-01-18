@@ -10,6 +10,7 @@ import cardMachineMd from "@/assets/images/general/card_machine_md.png";
 import pocketCardMachine from "@/assets/images/general/pocket_card_machine.png";
 import { Info, X, FileText, Download } from "lucide-react";
 import { Button } from "../ui/button";
+import { StepFooter } from "@/components/dynamic/StepFooter";
 import {
   Dialog,
   DialogClose,
@@ -632,7 +633,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
   };
 
   return (
-    <div>
+    <form onSubmit={(e) => { e.preventDefault(); handleConfirm(); }}>
       <LoadingOverlay message="Processing your application..." isVisible={isSubmittingOffer} />
       <div className="w-full max-w-6xl mx-auto">
         {/* Header */}
@@ -834,18 +835,12 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
         </div>
       </div>
 
-      <div className="flex mt-10 gap-4">
-        <Button variant="outline" className="w-full md:w-1/4" onClick={onBack} disabled={isValidating || isSubmittingOffer}>
-          Back
-        </Button>
-        <Button 
-          className="w-full md:w-1/4" 
-          onClick={handleConfirm}
-          disabled={isValidating || isSubmittingOffer}
-        >
-          {isSubmittingOffer ? "PROCESSING..." : "CONFIRM"}
-        </Button>
-      </div>
+      <StepFooter 
+        onBack={onBack}
+        nextLabel="Confirm"
+        isLoading={isSubmittingOffer}
+        isNextDisabled={isValidating}
+      />
 
 
       {/* Dialog */}
@@ -1012,6 +1007,6 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
         </DialogContent>
       </Dialog>
 
-    </div>
+    </form>
   );
 }
