@@ -164,7 +164,22 @@ export default function ApplicationCompletePage({}: Props) {
         {/* Done Button */}
         <div className="mt-8">
             <Button 
-                onClick={() => router.push("/")} 
+                onClick={() => {
+                  // Clear application data from localStorage
+                  localStorage.removeItem("merchantOnboardingData");
+                  localStorage.removeItem("productSetupData");
+                  localStorage.removeItem("companyDetailsFormData");
+                  localStorage.removeItem("deliveryDetailsFormData");
+                  localStorage.removeItem("companyBankingDetailsFormData");
+                  localStorage.removeItem("personalDetailsFormData");
+                  localStorage.removeItem("cardMachineSummaryFormData");
+                  localStorage.removeItem("companyFinancialInfoFormData");
+                  localStorage.removeItem("marketingConsentFormData");
+                  localStorage.removeItem("contractPendingSign");
+                  
+                  // Redirect to home
+                  router.push("/");
+                }} 
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-8 rounded-md"
             >
                 DONE
