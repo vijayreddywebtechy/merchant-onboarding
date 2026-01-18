@@ -123,3 +123,32 @@ This document outlines the API calls made throughout the Merchant Onboarding app
     *   **Method**: `POST`
     *   **Real Target**: `${https://api-gatewaynp.standardbank.co.za/npextorg/extnonprod}/retrieve/documents`
     *   **Purpose**: Retrieves the generated contract document.
+
+## 9. Contract Signing (OTC)
+### Screen: `app/account-onboarding/contract-signing-otp/page.tsx`
+*   **API Endpoint**: `/api/otp-token`
+    *   **Method**: `POST`
+    *   **Real Target**: `${https://api-gatewaynp.standardbank.co.za/npextorg/extnonprod}/sysauth/oauth2/token`
+    *   **Purpose**: Generates a token specifically for the contract signing OTP.
+
+*   **API Endpoint**: `/api/send-otp`
+    *   **Method**: `POST`
+    *   **Real Target**: `${https://api-gatewaynp.standardbank.co.za/npextorg/extnonprod}/unsecured-lending/otp`
+    *   **Purpose**: Sends the OTP to the user's mobile for contract signature.
+
+*   **API Endpoint**: `/api/verify-otp`
+    *   **Method**: `POST`
+    *   **Real Target**: `${https://api-gatewaynp.standardbank.co.za/npextorg/extnonprod}/unsecured-lending/otp`
+    *   **Purpose**: Verifies the entered OTP to electronically sign the contract.
+
+## 10. Application Submission
+### Screen: `app/account-onboarding/contract-signing-otp/page.tsx` (Triggered after successful OTP)
+*   **API Endpoint**: `/api/process-application` (Step 1)
+    *   **Method**: `POST` (Proxy) -> `PUT` (Backend)
+    *   **Real Target**: `${https://api-gatewaynp.standardbank.co.za/npextorg/extnonprod}/applications/applications`
+    *   **Purpose**: Updates the application status with the Process Identifier.
+
+*   **API Endpoint**: `/api/process-application` (Step 2)
+    *   **Method**: `POST` (Proxy) -> `PUT` (Backend)
+    *   **Real Target**: `${https://api-gatewaynp.standardbank.co.za/npextorg/extnonprod}/applications/applications`
+    *   **Purpose**: Updates the application status to confirm successful facial recognition and finalizes the submission.
