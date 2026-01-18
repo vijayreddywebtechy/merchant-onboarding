@@ -528,19 +528,199 @@ const Page: React.FC<Props> = () => {
     setSelectedBusiness(null);
   };
 
-  const handleSoleProprietor = () => {
+  const handleSoleProprietor = async () => {
     console.log("Continue as sole proprietor");
-    
-    // Mark as sole proprietor in localStorage
-    const storedData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
-    storedData.isSoleProprietor = true;
-    storedData.selectedCompany = null;
-    storedData.companyDirectors = null;
-    storedData.companyInfo = null;
-    localStorage.setItem("merchantOnboardingData", JSON.stringify(storedData));
-    
-    // Navigate to OTP verification
-    router.push("/account-onboarding/otp");
+    setIsLoading(true);
+    setLoadingMessage("Processing application...");
+    setError(null);
+
+    try {
+      // Mark as sole proprietor in localStorage
+      const storedData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
+      storedData.isSoleProprietor = true;
+      storedData.selectedCompany = null;
+      storedData.companyDirectors = null;
+      storedData.companyInfo = null;
+      localStorage.setItem("merchantOnboardingData", JSON.stringify(storedData));
+
+      // Get access token
+      let accessToken = null;
+      const token = localStorage.getItem("accessToken");
+      if (token) {
+        try {
+          const parsed = JSON.parse(token);
+          accessToken = parsed.access_token || token;
+        } catch {
+          accessToken = token;
+        }
+      }
+
+      // Prepare payload for pre-application
+      const customersData = storedData.customersData;
+      if (!customersData || customersData.length === 0) {
+           throw new Error("Customer data missing. Please try again from the beginning.");
+      }
+      const customer = customersData[0];
+      
+      // Get preferred contact details
+      const contacts = customer.customerDetails?.customer?.contacts || [];
+      const preferredEmail = contacts.find((c: any) => c.type === 'EMAIL' && c.preferredInd === 'true')?.value || 
+                             storedData.businessDetails?.email || '';
+      const preferredPhone = contacts.find((c: any) => c.type === 'PHONE' && c.preferredInd === 'true')?.value || 
+                             storedData.businessDetails?.cellphone || '';
+      
+      // Map province
+      const provinceMap: Record<string, string> = {
+        'eastern-cape': 'EC', 'eastern cape': 'EC',
+        'free-state': 'FS', 'free state': 'FS',
+        'gauteng': 'GP',
+        'kwazulu-natal': 'KZN', 'kwazulu natal': 'KZN',
+        'limpopo': 'LP',
+        'mpumalanga': 'MP',
+        'northern-cape': 'NC', 'northern cape': 'NC',
+        'north-west': 'NW', 'north west': 'NW',
+        'western-cape': 'WC', 'western cape': 'WC'
+      };
+      const provinceFull = storedData.businessDetails?.province || '';
+      const provinceCode = provinceMap[provinceFull.toLowerCase()] || '';
+      
+      const directorDetails = [{
+        status: null,
+        preferredCommunicationMethod: null,
+        pipDetails: {
+          publicOfficialRelatedDetails: {
+            typeOfRelationship: null,
+            surname: customer.personDetails?.lastName || "",
+            relatedToPublicOfficial: null,
+            name: customer.personDetails?.firstName || ""
+          },
+          publicOfficial: false
+        },
+        mainApplicant: true,
+        loggedInUser: true,
+        lastName: customer.personDetails?.lastName || "",
+        identificationType: "SAID",
+        identificationNumber: customer.identifications?.[0]?.number || "",
+        identificationCountryCode: "ZA",
+        firstName: customer.personDetails?.firstName || "",
+        emailAddress: preferredEmail,
+        digitalId: null,
+        cellphoneNumber: preferredPhone,
+        bpId: null,
+        authorizedToApply: false
+      }];
+
+      // Generate applicationId if not present
+      let applicationId = storedData.applicationId;
+      if (!applicationId) {
+        applicationId = `a6h9M${Date.now().toString().substring(0, 13)}QAA`;
+        storedData.applicationId = applicationId;
+        localStorage.setItem("merchantOnboardingData", JSON.stringify(storedData));
+      }
+      
+      // Build pre-application payload for Sole Proprietor
+      const preApplicationPayload = {
+        productDetails: {
+          productNumber: "ZPOS",
+          productDescription: "MYMOBIZ",
+          productCategory: "optional",
+          pricingOption: "ZAKP"
+        },
+        directorDetails: directorDetails,
+        consents: storedData.consents || {
+          partnerConsents: {
+            creditFraudConsent: true,
+            confirmIdentityConsent: true,
+            collectShare: true
+          },
+          marketingConsents: {
+            shareCustomerData: true,
+            receiveMarketing: true,
+            marketResearch: true,
+            externalMarketing: true
+          }
+        },
+        businessDetails: {
+          soleShareholdingInd: true, // Sole prop implies sole ownership
+          createLead: false,
+          businessType: "SOLE PROPRIETOR",
+          businessTurnover: storedData.businessDetails?.grossTurnover || "",
+          businessRegistrationNumber: customer.identifications?.[0]?.number || "",
+          businessProvince: provinceCode,
+          businessName: `${customer.personDetails?.firstName || ""} ${customer.personDetails?.lastName || ""}`.trim(), // Use person name as business name
+          businessCity: null
+        },
+        applicationDetails: {
+          inflightCustomerDataId: "MyMo Biz Account",
+          bpGuid: storedData.customerDetails?.customer?.bpGuid || null,
+          applicationId: applicationId
+        }
+      };
+
+      console.log('Sole Prop Pre-application payload:', JSON.stringify(preApplicationPayload, null, 2));
+
+      const preAppHeaders: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      if (accessToken) {
+        preAppHeaders["Authorization"] = `Bearer ${accessToken}`;
+      }
+
+      const preAppRes = await fetch('/api/pre-application', {
+        method: 'POST',
+        headers: preAppHeaders,
+        body: JSON.stringify(preApplicationPayload)
+      });
+
+      if (preAppRes.ok) {
+        const preAppData = await preAppRes.json();
+        console.log('Sole Prop Pre-application submitted successfully:', preAppData);
+        storedData.preApplicationResponse = preAppData;
+        localStorage.setItem("merchantOnboardingData", JSON.stringify(storedData));
+
+        // Handle different status codes (same as handleContinue)
+        const status = String(preAppData?.businessStatus);
+        
+        if (["52003", "52004", "52002", "52111", "52113", "52103", "52104"].includes(status)) {
+          router.push("/application/submission-status?type=moreInfo");
+        } else if (status === "52105") {
+          router.push("/application/submission-status?type=callBack");
+        } else if (status === "52109") {
+          router.push("/application/submission-status?type=unsuccessful");
+        } else if (status === "52110") {
+          router.push("/application/submission-status?type=inactiveCIPC");
+        } else if (status === "52112") {
+          router.push("/application/activeCIPC");
+        } else if (["52100", "52101", "52107", "52108"].includes(status)) {
+             // Technical error - continue to standard flow
+             console.warn(`Pre-application returned status ${status}. Continuing...`);
+             setError(`Technical error (${status}): ${preAppData?.responseStatusDesc || 'Exception'}. Continuing...`);
+             setTimeout(() => {
+                router.push("/account-onboarding/otp"); // For sole prop, maybe go to OTP directly as fallback?
+             }, 2000);
+        } else if (status === "52000") {
+             const redirectUri = encodeURIComponent(process.env.NEXT_PUBLIC_PING_REDIRECT_URI || "");
+                const pingAuthUrl = `${process.env.NEXT_PUBLIC_PING_AUTHORIZATION_URL}?client_id=${process.env.NEXT_PUBLIC_PING_CLIENT_ID}&response_type=code&scope=openid%20profile%20email&redirect_uri=${redirectUri}&code_challenge=${process.env.NEXT_PUBLIC_CODE_CHALLENGE}&code_challenge_method=${process.env.NEXT_PUBLIC_CODE_CHALLENGE_METHOD}&nonce=${process.env.NEXT_PUBLIC_PING_NONCE_STATE}&state=${process.env.NEXT_PUBLIC_PING_NONCE_STATE}`;
+                window.location.href = pingAuthUrl;
+        } else {
+             // Unknown status - Default proceed
+             router.push("/account-onboarding/otp");
+        }
+      } else {
+        const errorData = await preAppRes.json().catch(() => ({}));
+        console.error('Sole Prop Pre-application failed:', errorData);
+        // Fallback to OTP on error if we want to allow them to proceed manually? 
+        // Or show error? User requirement says "hit preapplication data". 
+        // I will throw error to stop if it fails.
+        throw new Error(errorData.responseStatusDesc || 'Pre-application submission failed');
+      }
+
+    } catch (err: any) {
+      console.error("Error processing sole proprietor:", err);
+      setError(err.message || "Failed to process request. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleBack = () => {
@@ -643,8 +823,11 @@ const Page: React.FC<Props> = () => {
                       <button
                         type="button"
                         onClick={() => handleBusinessSelect(business)}
-                        className={`relative w-full bg-white rounded-lg border border-neutral-200 hover:border-primary p-4 min-h-56 flex flex-col items-center justify-center gap-4 hover:shadow-md transition-all ${
-                          business.isInactive ? 'opacity-60' : ''
+                        disabled={business.isInactive}
+                        className={`relative w-full bg-white rounded-lg border border-neutral-200 p-4 min-h-56 flex flex-col items-center justify-center gap-4 transition-all ${
+                          business.isInactive 
+                            ? 'opacity-60 cursor-not-allowed' 
+                            : 'hover:border-primary hover:shadow-md cursor-pointer'
                         }`}
                       >
                         {business.isInactive && (

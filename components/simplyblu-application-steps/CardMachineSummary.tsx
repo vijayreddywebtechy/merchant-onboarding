@@ -19,6 +19,7 @@ import {
 } from "../ui/dialog";
 import { cardMachineSummarySchema } from "@/lib/validationSchemas";
 import { useCustomMutation } from "@/hooks/useCustomMutation";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { useDocumentMutation } from "@/hooks/useDocumentMutation";
 
 type CardMachineSummaryData = {
@@ -632,6 +633,7 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
 
   return (
     <div>
+      <LoadingOverlay message="Processing your application..." isVisible={isSubmittingOffer} />
       <div className="w-full max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
