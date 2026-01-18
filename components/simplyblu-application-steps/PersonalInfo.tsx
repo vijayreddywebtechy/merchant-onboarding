@@ -120,6 +120,10 @@ interface PersonalInfoProps {
 function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
   const formRef = React.useRef<HTMLFormElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [prefilledFields, setPrefilledFields] = useState<Record<string, boolean>>({});
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [showResults, setShowResults] = useState(false);
 
   const { mutate: updatePersonalDetails } = useCustomMutation({
     url: `/api/related-parties-update`,
@@ -134,6 +138,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
     trigger,
     watch,
     reset,
+    getValues,
   } = useForm<PersonalInfoFormData>({
     resolver: yupResolver(personalInfoSchema),
     mode: "onChange",
@@ -178,35 +183,44 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
           const digitalOfferId = parsed.preApplicationResponse?.digitalOfferId;
 
           if (digitalOfferId) {
-            console.log('Fetching digital offer for ID:', digitalOfferId);
-            const response = await fetch(`/api/digital-offer/${digitalOfferId}`, {
-              headers,
-            });
-            const data = await response.json();
+            // Check if we already have the data
+            if (!parsed.digitalOfferResponse) {
+              console.log('Fetching digital offer for ID:', digitalOfferId);
+              const response = await fetch(`/api/digital-offer/${digitalOfferId}`, {
+                headers,
+              });
+              const data = await response.json();
 
-            if (response.ok) {
-              console.log('Digital offer data:', data);
-              // Store the digital offer response in localStorage
-              parsed.digitalOfferResponse = data;
-              localStorage.setItem("merchantOnboardingData", JSON.stringify(parsed));
+              if (response.ok) {
+                console.log('Digital offer data:', data);
+                // Store the digital offer response in localStorage
+                parsed.digitalOfferResponse = data;
+                localStorage.setItem("merchantOnboardingData", JSON.stringify(parsed));
+              } else {
+                console.error('Failed to fetch digital offer:', data.error);
+              }
             } else {
-              console.error('Failed to fetch digital offer:', data.error);
+              console.log('Digital offer data already exists, skipping fetch');
             }
 
             // Fetch application process data using the same ID
-            console.log('Fetching application process data for ID:', digitalOfferId);
-            const processResponse = await fetch(`/api/application-process-data/${digitalOfferId}`, {
-              headers,
-            });
-            const processData = await processResponse.json();
+            if (!parsed.applicationProcessData) {
+              console.log('Fetching application process data for ID:', digitalOfferId);
+              const processResponse = await fetch(`/api/application-process-data/${digitalOfferId}`, {
+                headers,
+              });
+              const processData = await processResponse.json();
 
-            if (processResponse.ok) {
-              console.log('Application process data:', processData);
-              // Store the application process data response in localStorage
-              parsed.applicationProcessData = processData;
-              localStorage.setItem("merchantOnboardingData", JSON.stringify(parsed));
+              if (processResponse.ok) {
+                console.log('Application process data:', processData);
+                // Store the application process data response in localStorage
+                parsed.applicationProcessData = processData;
+                localStorage.setItem("merchantOnboardingData", JSON.stringify(parsed));
+              } else {
+                console.error('Failed to fetch application process data:', processData.error);
+              }
             } else {
-              console.error('Failed to fetch application process data:', processData.error);
+              console.log('Application process data already exists, skipping fetch');
             }
           }
         }
@@ -230,25 +244,39 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
         const director = parsed.selectedCompanyDetails?.COMPANY_DATA?.Directors?.[0];
         
         if (customerDetails?.personDetails) {
-          reset({
-            fname: customerDetails.personDetails.firstName || "",
-            lname: customerDetails.personDetails.lastName || "",
-            idNo: parsed.businessDetails?.directorId || "",
-            phoneNumber: parsed.businessDetails?.cellphone?.replace(/^0/, "") || "",
-            email: parsed.businessDetails?.email || "",
-            nationality: customerDetails.personDetails.nationality || "ZA",
-            citizenship: customerDetails.personDetails.citizenshipCountry || "ZA",
-            isPublicOfficial: "",
-            isSouthAfricaResident: "",
-            street: director?.RES_ADDR_1 || "",
-            unit: "",
-            buildingName: "",
-            suburb: director?.RES_ADDR_2 || "",
-            city: director?.RES_ADDR_3 || "",
-            province: director?.RES_ADDR_4?.toLowerCase() || "",
-            postalCode: director?.RES_POST_CODE || "",
-            addressSearch: "",
-          });
+            const apiValues = {
+              fname: customerDetails.personDetails.firstName || "",
+              lname: customerDetails.personDetails.lastName || "",
+              idNo: parsed.businessDetails?.directorId || "",
+              phoneNumber: parsed.businessDetails?.cellphone?.replace(/^0/, "") || "",
+              email: parsed.businessDetails?.email || "",
+              nationality: customerDetails.personDetails.nationality || "ZA",
+              citizenship: customerDetails.personDetails.citizenshipCountry || "ZA",
+              isPublicOfficial: "",
+              isSouthAfricaResident: "",
+              street: director?.RES_ADDR_1 || "",
+              unit: "",
+              buildingName: "",
+              suburb: director?.RES_ADDR_2 || "",
+              city: director?.RES_ADDR_3 || "",
+              province: director?.RES_ADDR_4?.toLowerCase() || "",
+              postalCode: director?.RES_POST_CODE || "",
+              addressSearch: "",
+            };
+
+            // Mark fields that have legitimate values as prefilled
+            const prefilled: Record<string, boolean> = {};
+            if (apiValues.fname) prefilled.fname = true;
+            if (apiValues.lname) prefilled.lname = true;
+            if (apiValues.idNo) prefilled.idNo = true;
+            if (apiValues.street) prefilled.street = true;
+            if (apiValues.suburb) prefilled.suburb = true;
+            if (apiValues.city) prefilled.city = true;
+            if (apiValues.province) prefilled.province = true;
+            if (apiValues.postalCode) prefilled.postalCode = true;
+            
+            setPrefilledFields(prefilled);
+            reset(apiValues);
         }
       }
     }
@@ -264,8 +292,70 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
 
 
 
-  const handleAddressSearch = (): void => {
-    console.log("Searching for address");
+  const handleAddressSearch = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const searchTerm = getValues("addressSearch");
+    if (!searchTerm || searchTerm.length < 3) return;
+
+    setIsSearchingAddress(true);
+    setSearchResults([]);
+    setShowResults(true);
+
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await fetch("/api/address-lookup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          streetValue: searchTerm,
+          province: "", // Optional
+        }),
+      });
+
+      const data = await response.json();
+
+      // Check for error response format
+      if (data && data.streetAddresses && Array.isArray(data.streetAddresses) && data.streetAddresses[0] === 'error') {
+        setSearchResults([]);
+        setShowResults(false);
+        return;
+      }
+      
+      let results = [];
+      if (data && Array.isArray(data.addressList)) {
+        results = data.addressList;
+      } else if (data && Array.isArray(data)) {
+        results = data;
+      } else if (data && typeof data === 'object' && !data.streetAddresses) {
+         results = [data]; 
+      }
+      
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Address search error:", error);
+    } finally {
+      setIsSearchingAddress(false);
+    }
+  };
+
+  const selectAddress = (address: any) => {
+    const currentValues = getValues();
+    const street = address.streetName || address.streetValue || "";
+
+    reset({
+      ...currentValues,
+      street: street, // Note: PersonalInfo uses 'street' not 'streetNumber' as key
+      suburb: address.suburb || "",
+      city: address.city || address.cityTown || "", // Note: PersonalInfo uses 'city'
+      province: address.province || "",
+      postalCode: address.postalCode || "",
+      addressSearch: address.formattedAddress || street,
+    });
+    
+    setShowResults(false);
   };
 
   const onSubmit = async (data: PersonalInfoFormData) => {
@@ -350,6 +440,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                 placeholder="Enter your first name"
                 {...register("fname")}
                 className={errors.fname ? "border-red-500" : ""}
+                disabled={prefilledFields.fname}
               />
               {errors.fname && (
                 <p className="text-red-500 text-sm">{errors.fname?.message as string}</p>
@@ -365,6 +456,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                 placeholder="Enter your surname"
                 {...register("lname")}
                 className={errors.lname ? "border-red-500" : ""}
+                disabled={prefilledFields.lname}
               />
               {errors.lname && (
                 <p className="text-red-500 text-sm">{errors.lname?.message as string}</p>
@@ -382,6 +474,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                 placeholder="Enter your ID number"
                 {...register("idNo")}
                 className={errors.idNo ? "border-red-500" : ""}
+                disabled={prefilledFields.idNo}
               />
               {errors.idNo && (
                 <p className="text-red-500 text-sm">{errors.idNo?.message as string}</p>
@@ -586,13 +679,43 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                 className="flex-1"
               />
               <button
-                type="button"
                 onClick={handleAddressSearch}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-800 hover:text-primary-dark focus:outline-none"
+                disabled={isSearchingAddress}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-800 hover:text-primary-dark focus:outline-none disabled:text-gray-400"
               >
-                <Search size={18} />
+                {isSearchingAddress ? (
+                  <div className="w-4 h-4 border-2 border-primary-dark border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Search size={18} />
+                )}
               </button>
             </div>
+            
+            {showResults && searchResults.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                {searchResults.map((result, index) => (
+                  <button
+                    key={index}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      selectAddress(result);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 focus:outline-none focus:bg-gray-50 border-b border-gray-100 last:border-0"
+                  >
+                    <div className="font-medium text-sm text-gray-900">
+                      {result.streetName || result.streetValue}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {[result.suburb, result.city, result.province, result.postalCode].filter(Boolean).join(", ")}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {showResults && !isSearchingAddress && searchResults.length === 0 && (
+               <div className="text-sm text-gray-500 mt-1">No results found.</div>
+            )}
           </div>
 
           {/* Street and Unit Number */}
@@ -605,6 +728,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                 placeholder="E.g 36 rissik street"
                 {...register("street")}
                 className={errors.street ? "border-red-500" : ""}
+                disabled={prefilledFields.street}
               />
               {errors.street && (
                 <p className="text-red-500 text-sm">{errors.street?.message as string}</p>
@@ -618,6 +742,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                 id="unit"
                 placeholder="e.g 123"
                 {...register("unit")}
+                disabled={prefilledFields.unit}
               />
             </div>
           </div>
@@ -633,6 +758,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                 id="buildingName"
                 placeholder="e.g Eye of Africa Estate"
                 {...register("buildingName")}
+                disabled={prefilledFields.buildingName}
               />
             </div>
 
@@ -644,6 +770,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                 placeholder="e.g Sandton"
                 {...register("suburb")}
                 className={errors.suburb ? "border-red-500" : ""}
+                disabled={prefilledFields.suburb}
               />
               {errors.suburb && (
                 <p className="text-red-500 text-sm">{errors.suburb?.message as string}</p>
@@ -671,6 +798,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                     }}
                     options={provinceOptions}
                     placeholder="Please select"
+                    isDisabled={prefilledFields.province}
                   />
                 )}
               />
@@ -693,6 +821,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                       {...field}
                       placeholder="e.g Johannesburg"
                       className={errors.city ? "border-red-500" : ""}
+                      disabled={prefilledFields.city}
                     />
                   )}
                 />
@@ -711,6 +840,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
                 placeholder="e.g 2001"
                 {...register("postalCode")}
                 className={errors.postalCode ? "border-red-500" : ""}
+                disabled={prefilledFields.postalCode}
               />
               {errors.postalCode && (
                 <p className="text-red-500 text-sm">
@@ -725,7 +855,7 @@ function PersonalInfo({ onNext, onBack }: PersonalInfoProps) {
             onBack={onBack} 
             isLoading={isSubmitting} 
             isBackDisabled={!onBack}
-            nextLabel="Next Step"
+            nextLabel="Next"
           />
         </div>
       </div>

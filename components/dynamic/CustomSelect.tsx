@@ -26,6 +26,7 @@ interface CustomSelectProps {
   transparentMenu?: boolean;
   className?: string;
   isMulti?: boolean;
+  isDisabled?: boolean;
 }
 
 const DropdownIndicator = (props: DropdownIndicatorProps<SelectOption, boolean>) => (
@@ -41,7 +42,8 @@ export default function CustomSelect({
   placeholder = "Select...", 
   transparentMenu = true, 
   className = "",
-  isMulti = false
+  isMulti = false,
+  isDisabled = false
 }: CustomSelectProps) {
   const selectId = useId();
   
@@ -140,6 +142,7 @@ export default function CustomSelect({
       className={`w-full ${className}`}
       classNamePrefix="react-select"
       isMulti={isMulti}
+      isDisabled={isDisabled}
       components={{
         DropdownIndicator,
         IndicatorSeparator: () => null,

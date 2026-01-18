@@ -1,14 +1,16 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import successBlue from "@/assets/images/icons/success_blue.png";
-import cardMachineShield from "@/assets/images/general/card_machine_shield.png";
 import cardMachine from "@/assets/images/general/card_machine_md.png";
 import GooglePlayBadge from "@/assets/images/general/google_play.png";
 import appStoreBadge from "@/assets/images/general/app_store.png";
-import mobileAppDevice from "@/assets/images/general/mobile_app_device_md.png";
-import userAvatar from "@/assets/images/icons/user_avatar_primary.png";
-
-import { CheckCircle, Clock, Info, User } from "lucide-react";
+import mobileAppDevice from "@/assets/images/general/mobile_app_device.png";
+ 
+import { Info, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Props = {};
@@ -39,158 +41,138 @@ const directors: Director[] = [
   },
 ];
 
-function page({}: Props) {
+export default function ApplicationCompletePage({}: Props) {
+  const router = useRouter();
+  const [merchantNumber, setMerchantNumber] = useState("Loading...");
+  const [email, setEmail] = useState("Loading...");
+
+  useEffect(() => {
+    // Retrieve data from localStorage
+    const merchantData = localStorage.getItem("merchantOnboardingData");
+    const personalData = localStorage.getItem("personalDetailsFormData");
+    
+    if (merchantData) {
+      try {
+        const parsed = JSON.parse(merchantData);
+        
+        const mNumber = parsed.preApplicationResponse?.merchantNumber || 
+                        parsed.applicationProcessData?.merchantNumber || 
+                        "2738920184"; // Fallback/Mock if not found in specific path during dev
+        setMerchantNumber(mNumber);
+      } catch (e) {
+        console.error("Error parsing merchant data", e);
+      }
+    }
+
+    if (personalData) {
+        try {
+            const parsed = JSON.parse(personalData);
+            if (parsed.email) setEmail(parsed.email);
+        } catch (e) {
+            console.error("Error parsing personal data", e);
+        }
+    }
+  }, []);
   return (
-    <div className="page-container py-4 md:py-8 lg:py-12">
-      <div className="bg-background px-4 py-6 sm:p-8 md:p-10 rounded-xl max-w-7xl mx-auto">
-        {/* Banner */}
-        <div className="flex flex-col-reverse md:flex-row items-center justify-around gap-4 bg-gradient-to-tl from-primary-dark to-primary text-white rounded-xl p-6 md:p-8 mb-12">
-          <div className="max-w-xl">
-            <div className="flex items-start gap-3">
-              <Image width={50} height={50} src={successBlue} alt="check" />
-              <div>
-                <h2 className="text-3xl md:text-3xl lg:text-4xl mb-6 lg:leading-tight">
-                  Application submitted successfully
-                </h2>
-                <p className="text-base sm:text-lg md:text-xl">
-                  Once the remaining directors have completed their part of the
-                  application, we’ll email your account details to
-                  name@gmail.com
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl w-full space-y-8 bg-white p-8 rounded-xl shadow-sm">
+        
+        {/* Header Section */}
+        <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-24 w-24 rounded-full bg-green-100 mb-6">
+                <Check className="h-12 w-12 text-green-600" />
+            </div>
+            <h1 className="text-3xl font-medium text-gray-900">Application submitted</h1>
+        </div>
+
+        {/* Notification Banner */}
+        <div className="bg-white border border-blue-200 rounded-lg p-6 flex items-start gap-4 shadow-sm relative overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gray-400"></div> {/* Grey accent line on left */}
+            <div className="shrink-0 mt-1">
+                 <div className="h-5 w-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">!</div>
+            </div>
+            <div>
+                <h3 className="text-gray-900 font-medium">Your merchant number is {merchantNumber}</h3>
+                <p className="text-gray-600 mt-1">
+                    We’ve received your application. Next steps will be sent to your email address: {email}
                 </p>
-              </div>
             </div>
-          </div>
-          <Image
-            width={256}
-            height={298}
-            src={cardMachineShield}
-            alt="card shield image"
-          />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
-          {/* Card */}
-          <div className="shadow rounded-xl border border-gray-200 overflow-hidden">
-            <div className="bg-gradient-to-r shadow text-white from-primary to-primary-dark p-3 sm:p-4 text-center font-medium text-sm sm:text-base">
-              SimplyBLU Pro
+        {/* Content Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+            {/* Left Card - SimplyBLU Pro */}
+            <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
+                <div className="bg-blue-700 p-4">
+                    <h3 className="text-white font-medium text-lg">SimplyBLU Pro</h3>
+                </div>
+                <div className="bg-blue-900 flex-1 flex items-center justify-center p-8 relative overflow-hidden">
+                     {/* Gradient background effect */}
+                     <div className="absolute inset-0 bg-gradient-to-b from-blue-800 to-blue-900"></div>
+                     <div className="relative z-10">
+                        <Image 
+                            src={cardMachine} 
+                            alt="SimplyBLU Pro Machine" 
+                            width={200}
+                            height={300}
+                            className="object-contain drop-shadow-xl transform rotate-[-10deg]"
+                        />
+                     </div>
+                </div>
+                <div className="p-6 bg-white">
+                    <p className="text-gray-700">Enjoy seamless transactions with your new card machine.</p>
+                </div>
             </div>
-            <div className="p-2 sm:p-3 bg-primary-dark h-64 sm:h-80 md:h-96 flex items-center justify-center">
-              <Image
-                src={cardMachine}
-                alt="card machine"
-                width={320}
-                height={298}
-                className="w-auto h-auto max-h-full object-contain"
-              />
+
+            {/* Right Card - Merchant App */}
+            <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
+                <div className="bg-blue-800 p-4">
+                    <h3 className="text-white font-medium text-lg">Download the SimplyBLU Merchant App</h3>
+                </div>
+                <div className="bg-blue-900 flex-1 p-8 text-white relative flex flex-col justify-between">
+                    <div className="mb-6">
+                        <p className="text-sm mb-6 text-blue-100">Unlock the full SimplyBLU platform by downloading the Merchant App.</p>
+                        <div className="flex gap-3">
+                            <Link href="#" className="w-32">
+                                <Image src={GooglePlayBadge} alt="Get it on Google Play" width={128} height={38} className="w-full h-auto" />
+                            </Link>
+                            <Link href="#" className="w-32">
+                                <Image src={appStoreBadge} alt="Download on the App Store" width={128} height={38} className="w-full h-auto" />
+                            </Link>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-auto pt-6 border-t border-blue-800/50">
+                        <p className="text-sm font-medium mb-2">Your card machine also accepts American Express and RCS.</p>
+                        <p className="text-xs text-blue-200 mb-3">To set this up, please contact these providers.</p>
+                        <div className="flex gap-3 items-center bg-white/10 p-2 rounded w-fit">
+                             {/* Placeholder for logos if actual files missed, using text styling to look decent */}
+                             <span className="bg-blue-600 text-white text-[10px] font-bold px-1 py-0.5 rounded border border-white/20">AMERICAN EXPRESS</span>
+                             <span className="bg-orange-500 text-white text-[10px] font-bold px-1 py-0.5 rounded border border-white/20">RCS</span>
+                             {/* If Amex logo image is available in assets, could use: <Image src={amexLogo} ... /> */}
+                        </div>
+                    </div>
+                    
+                    {/* Floating phone image often part of this design, positioned absolutely */}
+                    <div className="absolute top-4 right-4 w-16 opacity-80 hidden sm:block">
+                         <Image src={mobileAppDevice} alt="App" width={60} height={100} className="object-contain" />
+                    </div>
+                </div>
             </div>
-            <div className="p-3 sm:p-4">
-              <p className="text-sm sm:text-base text-gray-800">
-                Enjoy seamless transactions with your new card machine.
-              </p>
-            </div>
-          </div>
-          {/* Card */}
-          <div className="shadow rounded-xl border border-gray-200 overflow-hidden">
-            <div className="bg-gradient-to-r shadow text-white from-primary to-primary-dark p-3 sm:p-4 text-center font-medium text-sm sm:text-base">
-              SimplyBLU Merchant App
-            </div>
-            <div className="p-2 sm:p-3 bg-primary-dark h-64 sm:h-80 md:h-96 flex items-center justify-around gap-3 sm:gap-4 flex-col sm:flex-row">
-              <Image 
-                src={mobileAppDevice} 
-                alt="Mobile App" 
-                className="w-auto h-auto max-h-[60%] sm:max-h-[80%] object-contain"
-              />
-              <div className="flex flex-row sm:flex-col gap-2 sm:gap-3">
-                <Link href="/" className="w-32 sm:w-36 md:w-auto">
-                  <Image src={GooglePlayBadge} alt="Google Play" className="w-full h-auto" />
-                </Link>
-                <Link href="/" className="w-32 sm:w-36 md:w-auto">
-                  <Image src={appStoreBadge} alt="App Store" className="w-full h-auto" />
-                </Link>
-              </div>
-            </div>
-            <div className="p-3 sm:p-4">
-              <p className="text-sm sm:text-base text-gray-800">
-                Unlock the full SimplyBLU platform by downloading the Merchant
-                App.
-              </p>
-            </div>
-          </div>
         </div>
 
-        {/* Next Steps */}
-        <div className="w-full mx-auto px-3 sm:px-4 py-6 sm:py-8 border-y border-neutral-200 my-8 md:my-12">
-          {/* Header */}
-          <div className="mb-4 sm:mb-6">
-            <h2 className="text-base sm:text-lg font-medium text-neutral-900">
-              Next steps:
-            </h2>
-            <p className="mt-1 text-xs sm:text-sm text-neutral-600">
-              To help speed things up, please let the other directors know to
-              expect an email from us with the next steps to complete their part
-              of the application.
-            </p>
-          </div>
-
-          {/* Director Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {directors.map((director) => (
-              <DirectorCard key={director.name} {...director} />
-            ))}
-          </div>
-
-          {/* Info Alert */}
-          <div className="mt-4 sm:mt-6 flex items-start gap-2 sm:gap-3 rounded-lg bg-blue-50 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-blue-700">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>
-              Once the other directors complete the application, their status
-              will update automatically and you'll be notified.
-            </p>
-          </div>
-
-          {/* Action */}
-          <div className="mt-6 sm:mt-8 md:mt-10">
-            <Button className="w-full sm:w-auto min-w-[200px] sm:min-w-60">Done</Button>
-          </div>
+        {/* Done Button */}
+        <div className="mt-8">
+            <Button 
+                onClick={() => router.push("/")} 
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-8 rounded-md"
+            >
+                DONE
+            </Button>
         </div>
+
       </div>
     </div>
   );
 }
 
-export default page;
-
-interface DirectorCardProps extends Director {}
-
-function DirectorCard({ name, phone, status }: DirectorCardProps) {
-  const isDone = status === "done";
-
-  return (
-    <div className="flex items-center gap-3 sm:gap-4 rounded-xl border border-neutral-200 bg-white px-3 sm:px-4 py-4 sm:py-6">
-      {/* Avatar */}
-      <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-primary-dark flex-shrink-0">
-        <User className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-neutral-900 truncate">{name}</p>
-        <p className="text-xs text-neutral-500 my-1 truncate">{phone}</p>
-
-        <div className="my-1 flex items-center gap-1">
-          {isDone ? (
-            <>
-              <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-600" />
-              <span className="text-xs text-green-600">Done</span>
-            </>
-          ) : (
-            <>
-              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-500" />
-              <span className="text-xs text-orange-500">Pending</span>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}

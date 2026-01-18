@@ -325,25 +325,45 @@ export default function CardMachineSummary({ onNext, onBack }: Props) {
           body: documentPayload,
         },
         {
-          onSuccess: (blob) => {
-            console.log("Document retrieved successfully");
+          onSuccess: async (blob) => {
+            console.log("Document retrieved successfully. Size:", blob.size, "Type:", blob.type);
+            
+            // Check if valid blob
+            if (blob.size < 100) {
+              console.warn("Document blob is too small, possibly an error or empty.");
+              // valid PDF is usually larger. 
+              // Try to read it as text to see if it's an error message
+              try {
+                  const text = await blob.text();
+                  console.error("Blob content:", text);
+                  if (text.includes("error") || text.includes("exception")) {
+                      alert("Error retrieving document. The server returned an error: " + text.substring(0, 100));
+                      setIsLoadingDocument(false);
+                      return;
+                  }
+              } catch (e) {
+                  // ignore
+              }
+            }
             
             // Create a blob URL for the PDF
             const url = URL.createObjectURL(blob);
-            
-            // Open PDF in new tab
-            window.open(url, '_blank');
-            
-            // Also store the URL for download button
-            setDocumentUrl(url);
+            setDocumentUrl(url); // Set this immediately so the button works
             setIsLoadingDocument(false);
-
-            // Clean up the URL after a delay
-            setTimeout(() => {
-              if (url) {
-                URL.revokeObjectURL(url);
-              }
-            }, 1000);
+            
+            // Open PDF in new tab - wrap in try/catch and fallback to user click
+            try {
+                const link = document.createElement('a');
+                link.href = url;
+                link.target = '_blank';
+                // Some browsers block window.open but might allow link.click
+                // typically link.click() for _blank also triggers popup blocker if not user-initiated
+                // But we try nonetheless.
+                // window.open(url, '_blank'); 
+                link.click();
+            } catch (e) {
+                console.error("Auto-open failed", e);
+            }
           },
           onError: (error) => {
             console.error("Error retrieving document:", error);

@@ -44,6 +44,9 @@ export default function DeliveryDetails({ onNext, onBack }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const [companyAddress, setCompanyAddress] = React.useState<any>(null);
   const [residentialAddress, setResidentialAddress] = React.useState<any>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [showResults, setShowResults] = useState(false);
 
   const {
     control,
@@ -51,6 +54,7 @@ export default function DeliveryDetails({ onNext, onBack }: Props) {
     watch,
     handleSubmit,
     reset,
+    getValues,
   } = useForm<DeliveryDetailsData>({
     resolver: yupResolver(deliveryDetailsSchema) as any,
     mode: "onChange",
@@ -66,9 +70,9 @@ export default function DeliveryDetails({ onNext, onBack }: Props) {
       complexName: '',
       province: '',
       cityTown: '',
-      postalCode: '',
     },
   });
+
 
   React.useEffect(() => {
     const data = localStorage.getItem("deliveryDetailsFormData");
@@ -98,6 +102,72 @@ export default function DeliveryDetails({ onNext, onBack }: Props) {
     });
     return () => subscription.unsubscribe();
   }, [watch]);
+
+  const handleAddressSearch = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const searchTerm = getValues("addressSearch");
+    if (!searchTerm || searchTerm.length < 3) return;
+
+    setIsSearchingAddress(true);
+    setSearchResults([]);
+    setShowResults(true);
+
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await fetch("/api/address-lookup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          streetValue: searchTerm,
+          province: "", // Optional
+        }),
+      });
+
+      const data = await response.json();
+
+      // Check for error response format
+      if (data && data.streetAddresses && Array.isArray(data.streetAddresses) && data.streetAddresses[0] === 'error') {
+        setSearchResults([]);
+        setShowResults(false);
+        return;
+      }
+      
+      let results = [];
+      if (data && Array.isArray(data.addressList)) {
+        results = data.addressList;
+      } else if (data && Array.isArray(data)) {
+        results = data;
+      } else if (data && typeof data === 'object' && !data.streetAddresses) {
+         results = [data]; 
+      }
+      
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Address search error:", error);
+    } finally {
+      setIsSearchingAddress(false);
+    }
+  };
+
+  const selectAddress = (address: any) => {
+    const currentValues = getValues();
+    const street = address.streetName || address.streetValue || "";
+
+    reset({
+      ...currentValues,
+      streetNumber: street,
+      suburb: address.suburb || "",
+      cityTown: address.city || address.cityTown || "",
+      province: address.province || "",
+      postalCode: address.postalCode || "",
+      addressSearch: address.formattedAddress || street,
+    });
+    
+    setShowResults(false);
+  };
 
 
 
@@ -224,10 +294,39 @@ export default function DeliveryDetails({ onNext, onBack }: Props) {
                   )}
                 />
                 <button
-                  className="absolute right-0 top-0 h-full px-4 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 transition-colors flex items-center justify-center"
+                  onClick={handleAddressSearch}
+                  disabled={isSearchingAddress}
+                  className="absolute right-0 top-0 h-full px-4 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 transition-colors flex items-center justify-center disabled:bg-blue-400"
                 >
-                  <Search size={18} />
+                  {isSearchingAddress ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Search size={18} />
+                  )}
                 </button>
+            
+                {showResults && searchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    {searchResults.map((result, index) => (
+                      <button
+                        key={index}
+                        onClick={() => selectAddress(result)}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 focus:outline-none focus:bg-gray-50 border-b border-gray-100 last:border-0"
+                      >
+                        <div className="font-medium text-sm text-gray-900">
+                          {result.streetName || result.streetValue}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {[result.suburb, result.city, result.province, result.postalCode].filter(Boolean).join(", ")}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {showResults && !isSearchingAddress && searchResults.length === 0 && (
+                   <div className="text-sm text-gray-500 mt-1">No results found.</div>
+                )}
               </div>
             </div>
 

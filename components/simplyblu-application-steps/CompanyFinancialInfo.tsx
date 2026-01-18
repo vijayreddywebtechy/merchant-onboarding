@@ -660,7 +660,7 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
                 )}
               </div>
 
-              {/* Row: Funding Source + Irregular Income */}
+              {/* Row: Funding Source */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div className="space-y-2">
                   <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
@@ -692,51 +692,6 @@ function CompanyFinancialInfo({ onNext, onBack }: Props) {
                     )}
                   />
                 </div>
-
-                {/* Irregular Income */}
-                {showIrregularIncome && (
-                  <div className="space-y-2 relative">
-                    <div className="flex items-center justify-between">
-                      <Label className="uppercase text-xs font-medium tracking-wider text-gray-600">
-                        Irregular income (average monthly amount)
-                      </Label>
-                      <button
-                        type="button"
-                        onClick={() => setValue("showIrregularIncome", false)}
-                        className="text-blue-500 hover:text-blue-600"
-                      >
-                        <XCircle size={20} />
-                      </button>
-                    </div>
-                    <Controller
-                      name="irregularIncome"
-                      control={control}
-                      render={({ field }) => (
-                        <>
-                          <CustomSelect
-                            value={(() => {
-                              const found = amountRangeOptions.find(
-                                (opt) => opt.value === field.value
-                              );
-                              return found ? found : null;
-                            })()}
-                            onChange={(option: any) => {
-                              const selected = Array.isArray(option) ? option[0] : option;
-                              field.onChange(selected ? selected.value : "");
-                            }}
-                            options={amountRangeOptions}
-                            placeholder="R"
-                          />
-                          {errors.irregularIncome && (
-                            <p className="text-sm text-red-500">
-                              {errors.irregularIncome.message}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    />
-                  </div>
-                )}
               </div>
 
               {/* Row: Profit from Business Activity (alone) */}
