@@ -1,6 +1,8 @@
+import AuthGuard from "@/components/auth/AuthGuard";
 import Footer from "@/components/ui/layout/Footer";
 import Header from "@/components/ui/layout/Header";
-import React from "react";
+import React, { Suspense } from "react";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 
 type Props = {
   children: React.ReactNode;
@@ -13,7 +15,13 @@ const Layout = ({ children }: Props) => {
         <Header />
       </header>
 
-      <main className="flex-1 bg-gray-100">{children}</main>
+      <main className="flex-1 bg-gray-100">
+        <Suspense fallback={<LoadingOverlay isVisible={true} message="Loading..." />}>
+          <AuthGuard>
+            {children}
+          </AuthGuard>
+        </Suspense>
+      </main>
 
       <footer>
         <Footer />

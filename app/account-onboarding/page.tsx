@@ -21,16 +21,8 @@ const Page = (props: Props) => {
   const accessTokenMutation = useAccessToken();
 
   useEffect(() => {
-    const prodId = searchParams.get("prodId");
-    const prOpt = searchParams.get("prOpt");
     const step = searchParams.get("step");
 
-    if (prodId === "ZPOS" && prOpt === "ZSIB") {
-      const existingData = JSON.parse(localStorage.getItem("merchantOnboardingData") || "{}");
-      existingData.prodId = prodId;
-      existingData.prOpt = prOpt;
-      localStorage.setItem("merchantOnboardingData", JSON.stringify(existingData));
-    }
 
     // Handle step parameter for direct navigation
     if (step === "verification") {

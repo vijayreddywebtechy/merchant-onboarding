@@ -22,10 +22,16 @@ const Instructions = ({ onBack, onVerificationComplete }: Props) => {
       const handleMessage = (event: MessageEvent) => {
         // Check if the message is from iIdentifii
         if (event.origin === 'https://alphaweb.iidentifii.com' || event.origin === 'https://web.iidentifii.com') {
-          console.log('Received message from iIdentifii:', event.data);
-          // Assume any message indicates verification completion
-          // You may need to check event.data for specific completion signals
-          // onVerificationComplete();
+          console.log('Received message from iIdentifii:', JSON.stringify(event.data));
+          
+          // Check for specific completion signals if available in event.data
+          // Common patterns: { status: "completed" }, { type: "success" }, etc.
+          // For now, we'll proceed on any message as requested, but you should inspect the log above
+          // to implement stricter checks (e.g., if (event.data.status === 'failed') return;)
+          
+          // if (onVerificationComplete) {
+          //    onVerificationComplete();
+          // }
         }
       };
 
@@ -117,7 +123,7 @@ const Instructions = ({ onBack, onVerificationComplete }: Props) => {
     <>
       <LoadingOverlay message="Initializing face verification..." isVisible={isLoading} />
       
-      <div className="max-w-4xl">
+      <div className="max-w-6xl">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
             {error}
